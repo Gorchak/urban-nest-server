@@ -1,0 +1,18 @@
+const { getCollection } = require('./database');
+
+const COLLECTIONS = {
+  USERS: 'users',
+  CLOTHES: 'clothes',
+  REFERENCES: 'references',
+  CATEGORIES: 'categories',
+};
+
+const collections = {};
+
+Object.keys(COLLECTIONS).forEach((key) => {
+  Object.defineProperty(collections, key, {
+    get: () => getCollection(COLLECTIONS[key]),
+  });
+});
+
+module.exports = { COLLECTIONS, collections };

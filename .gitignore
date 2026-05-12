@@ -1,0 +1,46 @@
+# dependencies
+node_modules/
+
+# build
+dist/
+build/
+
+# coverage
+coverage/
+.nyc_output/
+
+# cache
+.cache/
+.tmp/
+.eslintcache
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# environment
+.env
+.env.*
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-data/
+volumes/
+
+# temporary
+tmp/
+temp/
