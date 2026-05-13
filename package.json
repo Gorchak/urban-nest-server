@@ -4,6 +4,7 @@
   "description": "Urban Nest - Backend API Server",
   "main": "src/server.js",
   "scripts": {
+    "build": "echo No build step required",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "lint": "eslint src/",
