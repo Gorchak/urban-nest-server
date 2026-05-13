@@ -10,6 +10,7 @@ const userRoutes = require('./routes/userRoutes');
 const clothesRoutes = require('./routes/clothesRoutes');
 const categoriesRoutes = require('./routes/categoriesRoutes');
 const referencesRoutes = require('./routes/referencesRoutes');
+const merchandiseRoutes = require('./routes/merchandiseRoutes');
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.get('/api', (req, res) => {
       clothes: '/api/clothes',
       categories: '/api/categories',
       references: '/api/references',
+      merchandise: '/api/merchandise',
     },
   });
 });
@@ -43,6 +45,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/clothes', clothesRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/references', referencesRoutes);
+app.use('/api/merchandise', merchandiseRoutes);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
