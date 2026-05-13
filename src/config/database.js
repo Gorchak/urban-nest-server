@@ -5,10 +5,11 @@ let db;
 
 const connectDB = async () => {
   try {
-    const uri = process.env.MONGODB_URI;
+    // Accept both MONGO_URI (Render convention) and MONGODB_URI (legacy)
+    const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
 
     if (!uri) {
-      throw new Error('MONGODB_URI is not defined in environment variables');
+      throw new Error('MONGO_URI (or MONGODB_URI) is not defined in environment variables');
     }
 
     client = new MongoClient(uri, {
