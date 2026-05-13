@@ -18,6 +18,11 @@ const connectDB = async () => {
         strict: true,
         deprecationErrors: true,
       },
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+      minPoolSize: 1,
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
     });
 
     await client.connect();
