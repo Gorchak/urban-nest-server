@@ -15,12 +15,19 @@ const merchandiseRoutes = require('./routes/merchandiseRoutes');
 
 const app = express();
 
-app.use(helmet());
-app.use(compression());
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:4200',
+const corsOptions = {
+  origin: [
+    'http://localhost:4200',
+    'https://urban-nest.netlify.app',
+  ],
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(compression());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
