@@ -12,6 +12,16 @@ const clothesRoutes = require('./routes/clothesRoutes');
 const categoriesRoutes = require('./routes/categoriesRoutes');
 const referencesRoutes = require('./routes/referencesRoutes');
 const merchandiseRoutes = require('./routes/merchandiseRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+
+// ── Cloudinary config guard ────────────────────────────────────────────────────
+if (
+  !process.env.CLOUDINARY_CLOUD_NAME ||
+  !process.env.CLOUDINARY_API_KEY ||
+  !process.env.CLOUDINARY_API_SECRET
+) {
+  throw new Error('Cloudinary config missing: set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in .env');
+}
 
 const app = express();
 
@@ -53,6 +63,7 @@ app.get('/api', (req, res) => {
       categories: '/api/categories',
       references: '/api/references',
       merchandise: '/api/merchandise',
+      upload: '/api/upload',
     },
   });
 });
@@ -62,6 +73,7 @@ app.use('/api/clothes', clothesRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/references', referencesRoutes);
 app.use('/api/merchandise', merchandiseRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);

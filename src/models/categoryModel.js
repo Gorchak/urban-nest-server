@@ -40,6 +40,7 @@ const CategorySchema = {
     coverImage: { type: 'string', maxLength: 2048 },
     bannerImage: { type: 'string', maxLength: 2048 },
     icon: { type: 'string', maxLength: 2048 },
+    images: { type: 'array', items: { type: 'string' }, default: [] },
   },
 };
 
@@ -90,6 +91,10 @@ const validateCategory = (data) => {
 
   if (data.seoKeywords && !Array.isArray(data.seoKeywords)) {
     errors.push('SEO keywords must be an array');
+  }
+
+  if (data.images !== undefined && !Array.isArray(data.images)) {
+    errors.push('images must be an array');
   }
 
   if (data.specifications !== undefined && data.specifications !== null) {

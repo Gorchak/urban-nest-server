@@ -113,6 +113,7 @@ const create = async (categoryData) => {
     coverImage: categoryData.coverImage || null,
     bannerImage: categoryData.bannerImage || null,
     icon: categoryData.icon || null,
+    images: Array.isArray(categoryData.images) ? categoryData.images : [],
     specifications: Array.isArray(categoryData.specifications)
       ? categoryData.specifications.map((s) => mapSpecification(s))
       : [],
@@ -186,6 +187,7 @@ const update = async (id, updates) => {
   if (updates.coverImage !== undefined) updatedFields.coverImage = updates.coverImage;
   if (updates.bannerImage !== undefined) updatedFields.bannerImage = updates.bannerImage;
   if (updates.icon !== undefined) updatedFields.icon = updates.icon;
+  if (updates.images !== undefined) updatedFields.images = Array.isArray(updates.images) ? updates.images : [];
   if (updates.specifications !== undefined) {
     updatedFields.specifications = Array.isArray(updates.specifications)
       ? updates.specifications.map((s) => mapSpecification(s))
