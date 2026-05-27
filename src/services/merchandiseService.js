@@ -31,12 +31,26 @@ const mapSpec = (s) => ({
 /**
  * Builds the MongoDB filter object from supported query params.
  */
-const buildFilter = (query) => {
+const buildFilter = async (query) => {
   const filter = { deletedAt: null };
 
   if (query.categoryId) {
     if (!isValidId(query.categoryId)) throw new ApiError('Invalid categoryId format', 400);
-    filter.categoryId = new ObjectId(query.categoryId);
+    if (query.includeChildren === 'true' || query.includeChildren === true) {
+      // Include items from parent category and all its children
+      // First get all child category IDs
+      const childCategories = await collections.CATEGORIES.find({
+        $or: [
+          { _id: new ObjectId(query.categoryId) },
+          { parentId: new ObjectId(query.categoryId) },
+        ],
+        deletedAt: null,
+      }).toArray();
+      const childIds = childCategories.map(c => c._id);
+      filter.categoryId = { $in: childIds };
+    } else {
+      filter.categoryId = new ObjectId(query.categoryId);
+    }
   }
   if (query.categorySlug) {
     filter.categorySlug = query.categorySlug;
@@ -92,7 +106,7 @@ const getMerchandiseList = async (query = {}) => {
   const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
   const skip = (page - 1) * limit;
 
-  const filter = buildFilter(query);
+  const filter = await buildFilter(query);
   const sort = buildSort(query.sortBy, query.sortOrder);
 
   const cursor = collections.MERCHANDISE.find(filter).sort(sort).skip(skip).limit(limit);
