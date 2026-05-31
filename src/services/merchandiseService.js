@@ -8,10 +8,13 @@
 const { ObjectId } = require('mongodb');
 const { collections } = require('../config/collections');
 const ApiError = require('../middleware/ApiError');
+const categoriesService = require('./categoriesService');
 const {
   generateSlug,
   validateMerchandise,
   validateSpecifications,
+  normalizeInventory,
+  normalizeMerchandiseItem,
 } = require('../models/merchandiseModel');
 
 const isValidId = (id) => ObjectId.isValid(id);
@@ -33,6 +36,7 @@ const mapSpec = (s) => ({
  */
 const buildFilter = async (query) => {
   const filter = { deletedAt: null };
+  const andClauses = [];
 
   if (query.categoryId) {
     if (!isValidId(query.categoryId)) throw new ApiError('Invalid categoryId format', 400);
@@ -59,10 +63,35 @@ const buildFilter = async (query) => {
     filter.isActive = query.isActive === 'true' || query.isActive === true;
   }
   if (query.inStock === 'true' || query.inStock === true) {
-    filter.stockQuantity = { $gt: 0 };
+    andClauses.push({
+      $or: [
+        { 'inventory.total_quantity': { $gt: 0 } },
+        { stockQuantity: { $gt: 0 } },
+        { quantity: { $gt: 0 } },
+      ],
+    });
   }
   if (query.outOfStock === 'true') {
-    filter.stockQuantity = { $lte: 0 };
+    andClauses.push({
+      $or: [
+        { 'inventory.total_quantity': { $lte: 0 } },
+        { inventory: { $exists: false }, stockQuantity: { $lte: 0 } },
+        { inventory: { $exists: false }, quantity: { $lte: 0 } },
+      ],
+    });
+  }
+  if (query.inventoryAttributeKey) {
+    filter['inventory.tracked_attribute.attribute_key'] = query.inventoryAttributeKey;
+  }
+  if (query.inventoryValueKey) {
+    filter['inventory.attribute_quantities'] = {
+      $elemMatch: {
+        value_key: query.inventoryValueKey,
+        ...(query.inventoryInStock === 'true' || query.inventoryInStock === true
+          ? { quantity: { $gt: 0 } }
+          : {}),
+      },
+    };
   }
   if (query.minPrice !== undefined || query.maxPrice !== undefined) {
     filter.salePrice = {};
@@ -71,7 +100,7 @@ const buildFilter = async (query) => {
   }
   if (query.search) {
     const re = new RegExp(query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    filter.$or = [{ name: re }, { sku: re }];
+    andClauses.push({ $or: [{ name: re }, { sku: re }] });
   }
   if (query.fromDate) {
     filter.createdAt = filter.createdAt || {};
@@ -81,7 +110,7 @@ const buildFilter = async (query) => {
     filter.createdAt = filter.createdAt || {};
     filter.createdAt.$lte = new Date(query.toDate);
   }
-
+  if (andClauses.length) filter.$and = andClauses;
   return filter;
 };
 
@@ -90,8 +119,15 @@ const buildFilter = async (query) => {
  * Defaults to newest first.
  */
 const buildSort = (sortBy, sortOrder) => {
-  const ALLOWED_SORT_FIELDS = ['createdAt', 'name', 'salePrice', 'stockQuantity', 'updatedAt'];
-  const field = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
+  const SORT_FIELD_MAP = {
+    createdAt: 'createdAt',
+    name: 'name',
+    salePrice: 'salePrice',
+    stockQuantity: 'inventory.total_quantity',
+    totalQuantity: 'inventory.total_quantity',
+    updatedAt: 'updatedAt',
+  };
+  const field = SORT_FIELD_MAP[sortBy] || 'createdAt';
   const order = sortOrder === 'asc' ? 1 : -1;
   return { [field]: order };
 };
@@ -116,7 +152,7 @@ const getMerchandiseList = async (query = {}) => {
   ]);
 
   return {
-    data: items,
+    data: items.map(normalizeMerchandiseItem),
     pagination: {
       total,
       page,
@@ -148,7 +184,7 @@ const getMerchandiseById = async (id) => {
 
   const item = await collections.MERCHANDISE.findOne({ _id: new ObjectId(id), deletedAt: null });
   if (!item) throw new ApiError('Merchandise not found', 404);
-  return item;
+  return normalizeMerchandiseItem(item);
 };
 
 /**
@@ -162,11 +198,13 @@ const createMerchandise = async (data) => {
 
   // 2. Resolve category
   if (!isValidId(data.categoryId)) throw new ApiError('Invalid categoryId format', 400);
-  const category = await collections.CATEGORIES.findOne({
-    _id: new ObjectId(data.categoryId),
-    deletedAt: null,
-  });
-  if (!category) throw new ApiError('Category not found', 404);
+  let category;
+  try {
+    category = await categoriesService.getById(data.categoryId);
+  } catch (err) {
+    if (err.statusCode === 404) throw new ApiError('Category not found', 404);
+    throw err;
+  }
 
   // 3. Check SKU uniqueness
   const existingSku = await collections.MERCHANDISE.findOne({
@@ -201,7 +239,7 @@ const createMerchandise = async (data) => {
       ? data.specifications.map(mapSpec)
       : [],
     images: Array.isArray(data.images) ? data.images.filter(Boolean) : [],
-    stockQuantity: data.stockQuantity ?? 0,
+    inventory: normalizeInventory(data),
     purchasePrice: data.purchasePrice ?? 0,
     salePrice: data.salePrice ?? 0,
     retailPrice: data.retailPrice ?? 0,
@@ -220,7 +258,7 @@ const createMerchandise = async (data) => {
   };
 
   const result = await collections.MERCHANDISE.insertOne(newItem);
-  return { ...newItem, _id: result.insertedId };
+  return normalizeMerchandiseItem({ ...newItem, _id: result.insertedId });
 };
 
 /**
@@ -241,11 +279,12 @@ const updateMerchandise = async (id, updates) => {
   let category = null;
   const categoryId = updates.categoryId !== undefined ? updates.categoryId : String(existing.categoryId);
   if (!isValidId(categoryId)) throw new ApiError('Invalid categoryId format', 400);
-  category = await collections.CATEGORIES.findOne({
-    _id: new ObjectId(categoryId),
-    deletedAt: null,
-  });
-  if (!category) throw new ApiError('Category not found', 404);
+  try {
+    category = await categoriesService.getById(categoryId);
+  } catch (err) {
+    if (err.statusCode === 404) throw new ApiError('Category not found', 404);
+    throw err;
+  }
 
   // Check SKU uniqueness (allow same SKU on same doc)
   if (updates.sku && updates.sku !== existing.sku) {
@@ -299,7 +338,13 @@ const updateMerchandise = async (id, updates) => {
   if (updates.images !== undefined) {
     updatedFields.images = Array.isArray(updates.images) ? updates.images.filter(Boolean) : [];
   }
-  if (updates.stockQuantity !== undefined) updatedFields.stockQuantity = updates.stockQuantity;
+  if (
+    updates.inventory !== undefined ||
+    updates.stockQuantity !== undefined ||
+    updates.quantity !== undefined
+  ) {
+    updatedFields.inventory = normalizeInventory({ ...existing, ...updates });
+  }
   if (updates.purchasePrice !== undefined) updatedFields.purchasePrice = updates.purchasePrice;
   if (updates.salePrice !== undefined) updatedFields.salePrice = updates.salePrice;
   if (updates.retailPrice !== undefined) updatedFields.retailPrice = updates.retailPrice;
@@ -320,7 +365,7 @@ const updateMerchandise = async (id, updates) => {
   );
 
   if (!result) throw new ApiError('Merchandise not found', 404);
-  return result;
+  return normalizeMerchandiseItem(result);
 };
 
 /**

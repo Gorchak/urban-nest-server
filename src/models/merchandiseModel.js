@@ -20,7 +20,14 @@ const MerchandiseSchema = {
     description: { type: 'text', maxLength: 10000 },
     shortDescription: { type: 'string', maxLength: 1000 },
     images: { type: 'array', items: { type: 'string' }, default: [] },
-    stockQuantity: { type: 'number', min: 0, default: 0 },
+    inventory: {
+      type: 'object',
+      default: {
+        total_quantity: 0,
+        tracked_attribute: null,
+        attribute_quantities: [],
+      },
+    },
     purchasePrice: { type: 'decimal', min: 0, default: 0 },
     salePrice: { type: 'decimal', min: 0, default: 0 },
     retailPrice: { type: 'decimal', min: 0, default: 0 },
@@ -126,6 +133,111 @@ const validateSpecValue = (type, value, referenceSlug) => {
   return null;
 };
 
+// ─── Inventory helpers ─────────────────────────────────────────────────────
+
+const toInventoryQuantity = (value, fallback = 0) => {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(0, Math.floor(numeric));
+};
+
+const sumAttributeQuantities = (rows) =>
+  (Array.isArray(rows) ? rows : []).reduce(
+    (sum, row) => sum + toInventoryQuantity(row?.quantity),
+    0
+  );
+
+const normalizeInventory = (data = {}) => {
+  const inventory = data.inventory && typeof data.inventory === 'object'
+    ? data.inventory
+    : null;
+
+  const legacyQuantity =
+    data.stockQuantity ??
+    data.quantity ??
+    inventory?.total_quantity ??
+    0;
+
+  if (!inventory) {
+    return {
+      total_quantity: toInventoryQuantity(legacyQuantity),
+      tracked_attribute: null,
+      attribute_quantities: [],
+    };
+  }
+
+  const tracked = inventory.tracked_attribute ?? null;
+  if (!tracked) {
+    return {
+      total_quantity: toInventoryQuantity(legacyQuantity),
+      tracked_attribute: null,
+      attribute_quantities: [],
+    };
+  }
+
+  const attributeQuantities = Array.isArray(inventory.attribute_quantities)
+    ? inventory.attribute_quantities.map((row) => ({
+        value_key: String(row?.value_key ?? ''),
+        value_label: String(row?.value_label ?? row?.value_key ?? ''),
+        quantity: toInventoryQuantity(row?.quantity),
+      }))
+    : [];
+
+  return {
+    total_quantity: sumAttributeQuantities(attributeQuantities),
+    tracked_attribute: {
+      attribute_key: String(tracked.attribute_key ?? ''),
+      attribute_label: String(tracked.attribute_label ?? tracked.attribute_key ?? ''),
+    },
+    attribute_quantities: attributeQuantities,
+  };
+};
+
+const normalizeMerchandiseItem = (item) => {
+  if (!item) return item;
+  return {
+    ...item,
+    inventory: normalizeInventory(item),
+  };
+};
+
+const validateInventory = (data = {}) => {
+  const errors = [];
+  const inventory = normalizeInventory(data);
+
+  if (!inventory.tracked_attribute) {
+    return errors;
+  }
+
+  const { tracked_attribute: tracked, attribute_quantities: rows } = inventory;
+
+  if (!tracked.attribute_key) {
+    errors.push('inventory.tracked_attribute.attribute_key is required');
+  }
+  if (!tracked.attribute_label) {
+    errors.push('inventory.tracked_attribute.attribute_label is required');
+  }
+
+  if (!Array.isArray(rows)) {
+    errors.push('inventory.attribute_quantities must be an array');
+    return errors;
+  }
+
+  rows.forEach((row, index) => {
+    if (!row.value_key) {
+      errors.push(`inventory.attribute_quantities[${index}].value_key is required`);
+    }
+    if (!row.value_label) {
+      errors.push(`inventory.attribute_quantities[${index}].value_label is required`);
+    }
+    if (!Number.isInteger(row.quantity) || row.quantity < 0) {
+      errors.push(`inventory.attribute_quantities[${index}].quantity must be a non-negative integer`);
+    }
+  });
+
+  return errors;
+};
+
 // ─── Dynamic specification validation ───────────────────────────────────────
 
 /**
@@ -229,11 +341,7 @@ const validateMerchandise = (data) => {
     errors.push('Description must be less than 10000 characters');
   }
 
-  if (data.stockQuantity !== undefined && data.stockQuantity !== null) {
-    if (typeof data.stockQuantity !== 'number' || data.stockQuantity < 0) {
-      errors.push('stockQuantity must be a non-negative number');
-    }
-  }
+  errors.push(...validateInventory(data));
 
   for (const priceField of ['purchasePrice', 'salePrice', 'retailPrice']) {
     if (data[priceField] !== undefined && data[priceField] !== null) {
@@ -276,4 +384,7 @@ module.exports = {
   validateMerchandise,
   validateSpecifications,
   validateSpecValue,
+  normalizeInventory,
+  normalizeMerchandiseItem,
+  validateInventory,
 };

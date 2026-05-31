@@ -6,6 +6,7 @@ const COLLECTIONS = {
   REFERENCES: 'references',
   CATEGORIES: 'categories',
   MERCHANDISE: 'merchandise',
+  SALES: 'sales',
 };
 
 const collections = {};

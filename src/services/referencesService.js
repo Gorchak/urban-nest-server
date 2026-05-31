@@ -101,6 +101,7 @@ const create = async (data) => {
     isRequired: Boolean(data.isRequired ?? false),
     isFilterable: Boolean(data.isFilterable ?? true),
     isVariant: Boolean(data.isVariant ?? false),
+    isStockTrackable: Boolean(data.isStockTrackable ?? false),
     isActive: Boolean(data.isActive ?? true),
     placeholder: data.placeholder || null,
     helperText: data.helperText || null,
@@ -159,6 +160,7 @@ const update = async (id, data) => {
   if (data.isRequired !== undefined) updatedFields.isRequired = Boolean(data.isRequired);
   if (data.isFilterable !== undefined) updatedFields.isFilterable = Boolean(data.isFilterable);
   if (data.isVariant !== undefined) updatedFields.isVariant = Boolean(data.isVariant);
+  if (data.isStockTrackable !== undefined) updatedFields.isStockTrackable = Boolean(data.isStockTrackable);
   if (data.isActive !== undefined) updatedFields.isActive = Boolean(data.isActive);
   if (data.placeholder !== undefined) updatedFields.placeholder = data.placeholder || null;
   if (data.helperText !== undefined) updatedFields.helperText = data.helperText || null;

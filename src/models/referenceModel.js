@@ -23,6 +23,7 @@ const ReferenceSchema = {
     isRequired: { type: 'boolean', default: false },
     isFilterable: { type: 'boolean', default: true },
     isVariant: { type: 'boolean', default: false },
+    isStockTrackable: { type: 'boolean', default: false },
     isActive: { type: 'boolean', default: true },
     placeholder: { type: 'string', nullable: true },
     helperText: { type: 'string', nullable: true },

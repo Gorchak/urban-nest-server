@@ -12,6 +12,7 @@ const clothesRoutes = require('./routes/clothesRoutes');
 const categoriesRoutes = require('./routes/categoriesRoutes');
 const referencesRoutes = require('./routes/referencesRoutes');
 const merchandiseRoutes = require('./routes/merchandiseRoutes');
+const salesRoutes = require('./routes/salesRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 
 // ── Cloudinary config guard ────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ app.get('/api', (req, res) => {
       categories: '/api/categories',
       references: '/api/references',
       merchandise: '/api/merchandise',
+      sales: '/api/sales',
       upload: '/api/upload',
     },
   });
@@ -73,6 +75,7 @@ app.use('/api/clothes', clothesRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/references', referencesRoutes);
 app.use('/api/merchandise', merchandiseRoutes);
+app.use('/api/sales', salesRoutes);
 app.use('/api/upload', uploadRoutes);
 
 app.use(notFoundHandler);

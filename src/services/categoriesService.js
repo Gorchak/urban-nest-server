@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const { collections, COLLECTIONS } = require('../config/collections');
+const { collections } = require('../config/collections');
 const ApiError = require('../middleware/ApiError');
 const { generateSlug, generatePath, calculateLevel, validateCategory } = require('../models/categoryModel');
 
@@ -7,35 +7,83 @@ const isValidId = (id) => ObjectId.isValid(id);
 
 /**
  * Maps a specification item from the request payload into the stored document shape.
- * Accepts both slim objects { referenceId, slug, isRequired, sortOrder }
- * and full reference snapshots (all ReferenceDefinition fields).
- * The _id field of the reference (if present) is stored as referenceId.
+ * Categories store only the category-level binding. Reference details are
+ * hydrated from the references collection on reads, so edits to references are
+ * immediately reflected in all categories and merchandise forms.
  */
 const mapSpecification = (s) => ({
   referenceId: s.referenceId || (s._id ? String(s._id) : null),
-  name: s.name || null,
-  slug: s.slug || '',
-  type: s.type || null,
-  description: s.description || null,
   isRequired: Boolean(s.isRequired ?? false),
   sortOrder: s.sortOrder ?? 0,
-  isFilterable: s.isFilterable ?? false,
-  isVariant: s.isVariant ?? false,
-  isActive: s.isActive ?? true,
-  placeholder: s.placeholder || null,
-  helperText: s.helperText || null,
-  icon: s.icon || null,
-  unit: s.unit || null,
-  min: s.min ?? null,
-  max: s.max ?? null,
-  minLength: s.minLength ?? null,
-  maxLength: s.maxLength ?? null,
-  regex: s.regex || null,
-  defaultValue: s.defaultValue ?? null,
-  options: Array.isArray(s.options) ? s.options : [],
-  createdAt: s.createdAt || null,
-  updatedAt: s.updatedAt || null,
 });
+
+const hydrateCategorySpecifications = async (category) => {
+  if (!category || !Array.isArray(category.specifications) || category.specifications.length === 0) {
+    return category;
+  }
+
+  const ids = category.specifications
+    .map((spec) => spec.referenceId || (spec._id ? String(spec._id) : null))
+    .filter((id) => id && isValidId(id))
+    .map((id) => new ObjectId(id));
+
+  if (!ids.length) return category;
+
+  const refs = await collections.REFERENCES.find({
+    _id: { $in: ids },
+    deletedAt: null,
+  }).toArray();
+  const refMap = new Map(refs.map((ref) => [String(ref._id), ref]));
+
+  return {
+    ...category,
+    specifications: category.specifications.map((spec) => {
+      const referenceId = spec.referenceId || (spec._id ? String(spec._id) : null);
+      const ref = referenceId ? refMap.get(referenceId) : null;
+
+      if (!ref) {
+        return {
+          ...spec,
+          referenceId,
+          isActive: false,
+          isStockTrackable: Boolean(spec.isStockTrackable ?? false),
+          options: Array.isArray(spec.options) ? spec.options : [],
+        };
+      }
+
+      return {
+        referenceId,
+        isRequired: Boolean(spec.isRequired ?? false),
+        sortOrder: spec.sortOrder ?? ref.sortOrder ?? 0,
+        name: ref.name,
+        slug: ref.slug,
+        type: ref.type,
+        description: ref.description ?? null,
+        isFilterable: Boolean(ref.isFilterable ?? false),
+        isVariant: Boolean(ref.isVariant ?? false),
+        isStockTrackable: Boolean(ref.isStockTrackable ?? false),
+        isActive: Boolean(ref.isActive ?? true),
+        placeholder: ref.placeholder ?? null,
+        helperText: ref.helperText ?? null,
+        icon: ref.icon ?? null,
+        unit: ref.unit ?? null,
+        min: ref.min ?? null,
+        max: ref.max ?? null,
+        minLength: ref.minLength ?? null,
+        maxLength: ref.maxLength ?? null,
+        regex: ref.regex ?? null,
+        defaultValue: ref.defaultValue ?? null,
+        options: Array.isArray(ref.options) ? ref.options : [],
+        createdAt: ref.createdAt ?? null,
+        updatedAt: ref.updatedAt ?? null,
+      };
+    }),
+  };
+};
+
+const hydrateCategories = async (categories) => Promise.all(
+  categories.map((category) => hydrateCategorySpecifications(category))
+);
 
 const getAll = async (query = {}, options = {}) => {
   const { page = 1, limit = 10, sort = { sortOrder: 1, createdAt: -1 }, select = {} } = options;
@@ -44,10 +92,11 @@ const getAll = async (query = {}, options = {}) => {
   const filter = { ...query, deletedAt: null };
   const cursor = collections.CATEGORIES.find(filter, { skip, limit }).project(select).sort(sort);
   const categories = await cursor.toArray();
+  const hydratedCategories = await hydrateCategories(categories);
   const total = await collections.CATEGORIES.countDocuments(filter);
 
   return {
-    data: categories,
+    data: hydratedCategories,
     pagination: {
       total,
       page: parseInt(page, 10),
@@ -62,7 +111,7 @@ const getById = async (id) => {
 
   const item = await collections.CATEGORIES.findOne({ _id: new ObjectId(id), deletedAt: null });
   if (!item) throw new ApiError('Category not found', 404);
-  return item;
+  return hydrateCategorySpecifications(item);
 };
 
 const create = async (categoryData) => {
@@ -123,7 +172,7 @@ const create = async (categoryData) => {
   };
 
   const result = await collections.CATEGORIES.insertOne(newItem);
-  return { ...newItem, _id: result.insertedId };
+  return hydrateCategorySpecifications({ ...newItem, _id: result.insertedId });
 };
 
 const update = async (id, updates) => {
@@ -201,7 +250,7 @@ const update = async (id, updates) => {
   );
 
   if (!result) throw new ApiError('Category not found', 404);
-  return result;
+  return hydrateCategorySpecifications(result);
 };
 
 const remove = async (id) => {
@@ -220,6 +269,7 @@ const remove = async (id) => {
 module.exports = {
   getAll,
   getById,
+  hydrateCategorySpecifications,
   create,
   update,
   remove,

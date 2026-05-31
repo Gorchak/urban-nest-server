@@ -107,10 +107,6 @@ const validateCategory = (data) => {
         if (!refId || typeof refId !== 'string') {
           errors.push(`Specification[${i}]: referenceId (or _id) is required`);
         }
-        const slug = spec.slug;
-        if (!slug || typeof slug !== 'string') {
-          errors.push(`Specification[${i}]: slug is required`);
-        }
       });
     }
   }
