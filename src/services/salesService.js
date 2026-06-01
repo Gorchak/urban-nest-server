@@ -3,6 +3,7 @@ const { collections } = require('../config/collections');
 const ApiError = require('../middleware/ApiError');
 const { normalizeSale, validateSale } = require('../models/saleModel');
 const { normalizeInventory } = require('../models/merchandiseModel');
+const novaPoshtaService = require('./novaPoshtaService');
 
 const isValidId = (id) => ObjectId.isValid(id);
 
@@ -57,18 +58,52 @@ const getSaleById = async (id) => {
 
 const getAdjustmentState = (sale) => sale?.inventoryAdjustment?.state || 'none';
 
+const DEDUCTED_STATUSES = new Set(['shipped', 'delivered']);
+
 const determineInventoryAction = (previousSale, nextSale) => {
   const previousState = getAdjustmentState(previousSale);
 
-  if (nextSale.status === 'shipped' && previousState !== 'deducted') {
+  if (DEDUCTED_STATUSES.has(nextSale.status) && previousState !== 'deducted') {
     return 'deduct';
   }
 
-  if (nextSale.status === 'refunded' && previousState !== 'returned') {
+  if (!DEDUCTED_STATUSES.has(nextSale.status) && previousState === 'deducted') {
     return 'return';
   }
 
   return null;
+};
+
+const shouldCreateNovaPoshtaDocument = (sale) =>
+  sale.shippingAddress?.deliveryService === 'nova_poshta' &&
+  DEDUCTED_STATUSES.has(sale.status) &&
+  sale.shippingAddress?.warehouseRef &&
+  !sale.shippingAddress?.trackingNumber;
+
+const ensureNovaPoshtaDocument = async (sale) => {
+  if (!shouldCreateNovaPoshtaDocument(sale)) return sale;
+  if (!novaPoshtaService.hasSenderConfig()) {
+    return {
+      ...sale,
+      shippingAddress: {
+        ...sale.shippingAddress,
+        novaPoshtaDocumentStatus: 'sender_config_missing',
+        novaPoshtaDocumentError: `Missing sender config: ${novaPoshtaService.getMissingSenderConfig().join(', ')}`,
+      },
+    };
+  }
+
+  const document = await novaPoshtaService.createInternetDocumentForSale(sale);
+  return {
+    ...sale,
+    shippingAddress: {
+      ...sale.shippingAddress,
+      trackingNumber: document.IntDocNumber || sale.shippingAddress.trackingNumber,
+      novaPoshtaDocumentRef: document.Ref || '',
+      novaPoshtaCostOnSite: document.CostOnSite || '',
+      novaPoshtaEstimatedDeliveryDate: document.EstimatedDeliveryDate || '',
+    },
+  };
 };
 
 const applyInventoryAction = async (sale, action) => {
@@ -129,7 +164,7 @@ const applyInventoryAction = async (sale, action) => {
 
     await collections.MERCHANDISE.updateOne(
       { _id: merchandise._id },
-      { $set: { inventory, updatedAt: new Date() } }
+      { $set: { inventory, stockQuantity: inventory.total_quantity, updatedAt: new Date() } }
     );
   }
 
@@ -151,11 +186,12 @@ const createSale = async (data) => {
   if (existing) throw new ApiError(`Sale "${normalized.orderNumber}" already exists`, 409);
 
   const now = new Date();
+  const saleWithDelivery = await ensureNovaPoshtaDocument(normalized);
   const inventoryAdjustment = await applyInventoryAction(
-    normalized,
-    determineInventoryAction(null, normalized)
+    saleWithDelivery,
+    determineInventoryAction(null, saleWithDelivery)
   );
-  const doc = { ...normalized, inventoryAdjustment, createdAt: now, updatedAt: now, deletedAt: null };
+  const doc = { ...saleWithDelivery, inventoryAdjustment, createdAt: now, updatedAt: now, deletedAt: null };
   const result = await collections.SALES.insertOne(doc);
   return { ...doc, _id: result.insertedId };
 };
@@ -176,14 +212,16 @@ const updateSale = async (id, updates) => {
     if (duplicate) throw new ApiError(`Sale "${normalized.orderNumber}" already exists`, 409);
   }
 
-  normalized.inventoryAdjustment = await applyInventoryAction(
-    normalized,
-    determineInventoryAction(existing, normalized)
+  const saleWithDelivery = await ensureNovaPoshtaDocument(normalized);
+
+  saleWithDelivery.inventoryAdjustment = await applyInventoryAction(
+    saleWithDelivery,
+    determineInventoryAction(existing, saleWithDelivery)
   );
 
   const result = await collections.SALES.findOneAndUpdate(
     { _id: new ObjectId(id), deletedAt: null },
-    { $set: { ...normalized, updatedAt: new Date() } },
+    { $set: { ...saleWithDelivery, updatedAt: new Date() } },
     { returnDocument: 'after' }
   );
 
@@ -193,9 +231,13 @@ const updateSale = async (id, updates) => {
 
 const deleteSale = async (id) => {
   if (!isValidId(id)) throw new ApiError('Invalid sale ID format', 400);
+  const existing = await getSaleById(id);
+  const inventoryAdjustment = getAdjustmentState(existing) === 'deducted'
+    ? await applyInventoryAction(existing, 'return')
+    : existing.inventoryAdjustment;
   const result = await collections.SALES.findOneAndUpdate(
     { _id: new ObjectId(id), deletedAt: null },
-    { $set: { deletedAt: new Date(), updatedAt: new Date() } },
+    { $set: { inventoryAdjustment, deletedAt: new Date(), updatedAt: new Date() } },
     { returnDocument: 'after' }
   );
   if (!result) throw new ApiError('Sale not found', 404);
