@@ -3,8 +3,8 @@ const { ApiResponse } = require('../utils/apiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 
 const getUsers = asyncHandler(async (req, res) => {
-  const { page, limit, sort, select } = req.query;
-  const result = await userService.getAll({}, { page, limit, sort, select });
+  const { page, limit, sort, search } = req.query;
+  const result = await userService.getAll({ search }, { page, limit, sort });
   res.status(200).json(ApiResponse.success(result.data, 'Users retrieved successfully', result.pagination));
 });
 
@@ -13,19 +13,19 @@ const getUserById = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success(user, 'User retrieved successfully'));
 });
 
-const createUser = asyncHandler(async (req, res) => {
-  const user = await userService.create(req.body);
-  res.status(201).json(ApiResponse.success(user, 'User created successfully'));
-});
-
 const updateUser = asyncHandler(async (req, res) => {
   const user = await userService.update(req.params.id, req.body);
   res.status(200).json(ApiResponse.success(user, 'User updated successfully'));
 });
 
-const deleteUser = asyncHandler(async (req, res) => {
-  await userService.remove(req.params.id);
-  res.status(200).json(ApiResponse.success(null, 'User deleted successfully'));
+const updateUserPassword = asyncHandler(async (req, res) => {
+  const user = await userService.updatePassword(req.params.id, req.body.password);
+  res.status(200).json(ApiResponse.success(user, 'User password updated successfully'));
 });
 
-module.exports = { getUsers, getUserById, createUser, updateUser, deleteUser };
+const sendPasswordReset = asyncHandler(async (req, res) => {
+  const result = await userService.sendPasswordReset(req.params.id);
+  res.status(200).json(ApiResponse.success(result, 'Password reset email sent successfully'));
+});
+
+module.exports = { getUsers, getUserById, updateUser, updateUserPassword, sendPasswordReset };

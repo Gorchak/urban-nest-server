@@ -7,6 +7,7 @@ const compression = require('compression');
 const notFoundHandler = require('./middleware/notFoundHandler');
 const { globalErrorHandler } = require('./middleware/errorHandler');
 
+const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const clothesRoutes = require('./routes/clothesRoutes');
 const categoriesRoutes = require('./routes/categoriesRoutes');
@@ -60,6 +61,7 @@ app.get('/api', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
+      auth: '/api/auth',
       users: '/api/users',
       clothes: '/api/clothes',
       categories: '/api/categories',
@@ -72,6 +74,7 @@ app.get('/api', (req, res) => {
   });
 });
 
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/clothes', clothesRoutes);
 app.use('/api/categories', categoriesRoutes);
