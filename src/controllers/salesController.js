@@ -1,6 +1,8 @@
 const salesService = require('../services/salesService');
 const { ApiResponse } = require('../utils/apiResponse');
 const asyncHandler = require('../utils/asyncHandler');
+const cartsService = require('../services/cartsService');
+const ApiError = require('../middleware/ApiError');
 
 const getSales = asyncHandler(async (req, res) => {
   const result = await salesService.getSalesList(req.query);
@@ -17,6 +19,53 @@ const createSale = asyncHandler(async (req, res) => {
   res.status(201).json(ApiResponse.success(item, 'Sale created successfully'));
 });
 
+const checkout = asyncHandler(async (req, res) => {
+  const userId = req.auth?.sub || null;
+  const guestId = userId ? null : String(req.body.guestId || '');
+  if (!userId && !guestId) throw new ApiError('guestId is required', 400);
+  const cart = await cartsService.getByOwner(userId, guestId);
+  const availableItems = (cart?.items || []).filter((cartItem) => cartItem.product);
+  if (!availableItems.length) {
+    throw new ApiError('Cart is empty', 400);
+  }
+  const items = availableItems.map((cartItem) => ({
+    merchandiseId: cartItem.merchandiseId,
+    sku: cartItem.product.sku,
+    name: cartItem.product.name,
+    image: cartItem.product.images?.[0] || null,
+    selectedAttributes: cartItem.inventoryValueLabel
+      ? [{ label: cartItem.product.inventory?.tracked_attribute?.attribute_label || '', value: cartItem.inventoryValueLabel }]
+      : [],
+    inventoryAttributeKey: cartItem.product.inventory?.tracked_attribute?.attribute_key || null,
+    inventoryAttributeLabel: cartItem.product.inventory?.tracked_attribute?.attribute_label || null,
+    inventoryValueKey: cartItem.inventoryValueKey,
+    inventoryValueLabel: cartItem.inventoryValueLabel,
+    quantity: cartItem.quantity,
+    unitPrice: cartItem.product.salePrice,
+    totalPrice: cartItem.product.salePrice * cartItem.quantity,
+  }));
+  availableItems.forEach((cartItem) => {
+    const inventory = cartItem.product.inventory;
+    const available = inventory.tracked_attribute
+      ? inventory.attribute_quantities.find((row) => row.value_key === cartItem.inventoryValueKey)?.quantity ?? 0
+      : inventory.total_quantity;
+    if (cartItem.quantity > available) {
+      throw new ApiError(`Not enough stock for "${cartItem.product.name}"`, 400);
+    }
+  });
+  const subtotal = items.reduce((sum, saleItem) => sum + saleItem.totalPrice, 0);
+  const item = await salesService.createSale({
+    ...req.body,
+    userId,
+    orderNumber: req.body.orderNumber || `UN-${Date.now().toString(36).toUpperCase()}`,
+    items,
+    subtotal,
+    grandTotal: subtotal + Math.max(0, Number(req.body.shippingCost || 0)),
+  });
+  await cartsService.clear(userId, guestId);
+  res.status(201).json(ApiResponse.success(item, 'Order created successfully'));
+});
+
 const updateSale = asyncHandler(async (req, res) => {
   const item = await salesService.updateSale(req.params.id, req.body);
   res.status(200).json(ApiResponse.success(item, 'Sale updated successfully'));
@@ -31,6 +80,7 @@ module.exports = {
   getSales,
   getSaleById,
   createSale,
+  checkout,
   updateSale,
   deleteSale,
 };

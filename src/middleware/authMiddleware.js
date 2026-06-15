@@ -88,17 +88,39 @@ const protectAuth0 = asyncHandler(async (req, res, next) => {
   next();
 });
 
+const optionalAuth0 = asyncHandler(async (req, res, next) => {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return next();
+  const payload = await verifyAuth0Token(token);
+  req.auth = { sub: payload.sub, email: payload.email || null };
+  next();
+});
+
 const requireAdmin = asyncHandler(async (req, res, next) => {
   if (!req.auth?.sub) return next(new ApiError('Потрібно залогінитись', 401));
 
   const user = await userService.getById(req.auth.sub);
   req.currentUser = user;
 
-  if (user.appMetadata?.isAdmin !== true) {
+  if (user.appMetadata?.isAdmin !== true && user.appMetadata?.isModerator !== true) {
     return next(new ApiError('Немає прав на перегляд цих сторінок', 403));
   }
 
   next();
 });
 
-module.exports = { protectAuth0, requireAdmin };
+const requireSelfOrAdmin = asyncHandler(async (req, res, next) => {
+  if (!req.auth?.sub) return next(new ApiError('Authentication required', 401));
+  const user = await userService.getById(req.auth.sub);
+  const canManageUsers = user.appMetadata?.isAdmin === true || user.appMetadata?.isModerator === true;
+  if (req.auth.sub !== req.params.id && !canManageUsers) {
+    return next(new ApiError('Not allowed to manage this user', 403));
+  }
+
+  req.currentUser = user;
+  req.canManageUsers = canManageUsers;
+  next();
+});
+
+module.exports = { protectAuth0, optionalAuth0, requireAdmin, requireSelfOrAdmin };

@@ -16,6 +16,7 @@ const merchandiseRoutes = require('./routes/merchandiseRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const novaPoshtaRoutes = require('./routes/novaPoshtaRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const cartsRoutes = require('./routes/cartsRoutes');
 
 // ── Cloudinary config guard ────────────────────────────────────────────────────
 if (
@@ -70,6 +71,7 @@ app.get('/api', (req, res) => {
       sales: '/api/sales',
       novaPoshta: '/api/nova-poshta',
       upload: '/api/upload',
+      carts: '/api/carts',
     },
   });
 });
@@ -83,6 +85,7 @@ app.use('/api/merchandise', merchandiseRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/nova-poshta', novaPoshtaRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/carts', cartsRoutes);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);

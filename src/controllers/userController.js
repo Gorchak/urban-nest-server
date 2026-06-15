@@ -14,7 +14,9 @@ const getUserById = asyncHandler(async (req, res) => {
 });
 
 const updateUser = asyncHandler(async (req, res) => {
-  const user = await userService.update(req.params.id, req.body);
+  const updates = { ...req.body };
+  if (!req.canManageUsers) delete updates.appMetadata;
+  const user = await userService.update(req.params.id, updates);
   res.status(200).json(ApiResponse.success(user, 'User updated successfully'));
 });
 

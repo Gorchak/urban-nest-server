@@ -19,6 +19,7 @@ const VALID_PAYMENT_STATUSES = ['unpaid', 'paid', 'partially_paid', 'refunded'];
 const SaleSchema = {
   fields: {
     orderNumber: { type: 'string', required: true },
+    userId: { type: 'string', nullable: true },
     status: { type: 'string', enum: VALID_SALE_STATUSES, default: 'pending_payment' },
     customer: { type: 'object', required: true },
     shippingAddress: { type: 'object', required: true },
@@ -31,6 +32,7 @@ const SaleSchema = {
     grandTotal: { type: 'number', min: 0, default: 0 },
     currency: { type: 'string', default: 'UAH' },
     notes: { type: 'text', nullable: true },
+    doNotCall: { type: 'boolean', default: false },
     createdAt: { type: 'datetime' },
     updatedAt: { type: 'datetime' },
     deletedAt: { type: 'datetime', nullable: true },
@@ -71,6 +73,7 @@ const normalizeSale = (data = {}) => {
 
   return {
     orderNumber: data.orderNumber || '',
+    userId: data.userId || null,
     status: data.status || 'pending_payment',
     customer: {
       firstName: data.customer?.firstName || '',
@@ -111,6 +114,7 @@ const normalizeSale = (data = {}) => {
     grandTotal: toNumber(data.grandTotal, Math.max(0, subtotal - discountTotal + shippingCost)),
     currency: data.currency || 'UAH',
     notes: data.notes || null,
+    doNotCall: Boolean(data.doNotCall),
     inventoryAdjustment: data.inventoryAdjustment || { state: 'none', updatedAt: null },
   };
 };

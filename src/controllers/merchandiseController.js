@@ -14,6 +14,11 @@ const getMerchandiseById = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success(item, 'Merchandise retrieved successfully'));
 });
 
+const getMerchandiseBySlug = asyncHandler(async (req, res) => {
+  const item = await merchandiseService.getMerchandiseBySlug(req.params.slug);
+  res.status(200).json(ApiResponse.success(item, 'Merchandise retrieved successfully'));
+});
+
 const createMerchandise = asyncHandler(async (req, res) => {
   const item = await merchandiseService.createMerchandise(req.body);
   res.status(201).json(ApiResponse.success(item, 'Merchandise created successfully'));
@@ -32,6 +37,7 @@ const deleteMerchandise = asyncHandler(async (req, res) => {
 module.exports = {
   getMerchandise,
   getMerchandiseById,
+  getMerchandiseBySlug,
   createMerchandise,
   updateMerchandise,
   deleteMerchandise,

@@ -62,6 +62,9 @@ const buildFilter = async (query) => {
   if (query.isActive !== undefined) {
     filter.isActive = query.isActive === 'true' || query.isActive === true;
   }
+  if (query.isVisible !== undefined) {
+    filter.isVisible = query.isVisible === 'true' || query.isVisible === true;
+  }
   if (query.inStock === 'true' || query.inStock === true) {
     andClauses.push({
       $or: [
@@ -183,6 +186,12 @@ const getMerchandiseById = async (id) => {
   if (!isValidId(id)) throw new ApiError('Invalid merchandise ID format', 400);
 
   const item = await collections.MERCHANDISE.findOne({ _id: new ObjectId(id), deletedAt: null });
+  if (!item) throw new ApiError('Merchandise not found', 404);
+  return normalizeMerchandiseItem(item);
+};
+
+const getMerchandiseBySlug = async (slug) => {
+  const item = await collections.MERCHANDISE.findOne({ slug, deletedAt: null });
   if (!item) throw new ApiError('Merchandise not found', 404);
   return normalizeMerchandiseItem(item);
 };
@@ -387,6 +396,7 @@ const deleteMerchandise = async (id) => {
 module.exports = {
   getMerchandiseList,
   getMerchandiseById,
+  getMerchandiseBySlug,
   getMerchandiseByCategory,
   createMerchandise,
   updateMerchandise,

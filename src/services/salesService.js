@@ -4,6 +4,7 @@ const ApiError = require('../middleware/ApiError');
 const { normalizeSale, validateSale } = require('../models/saleModel');
 const { normalizeInventory } = require('../models/merchandiseModel');
 const novaPoshtaService = require('./novaPoshtaService');
+const mailService = require('./mailService');
 
 const isValidId = (id) => ObjectId.isValid(id);
 
@@ -193,7 +194,25 @@ const createSale = async (data) => {
   );
   const doc = { ...saleWithDelivery, inventoryAdjustment, createdAt: now, updatedAt: now, deletedAt: null };
   const result = await collections.SALES.insertOne(doc);
-  return { ...doc, _id: result.insertedId };
+  let created = { ...doc, _id: result.insertedId };
+  try {
+    const notification = await mailService.sendOrderNotification(created);
+    const emailNotification = {
+      status: notification.sent ? 'sent' : notification.reason,
+      sentAt: notification.sent ? new Date() : null,
+      messageId: notification.messageId || null,
+      recipient: notification.recipient || null,
+      missingConfig: notification.missing || [],
+    };
+    await collections.SALES.updateOne({ _id: result.insertedId }, { $set: { emailNotification } });
+    created = { ...created, emailNotification };
+  } catch (error) {
+    const emailNotification = { status: 'failed', sentAt: null, error: error.message };
+    await collections.SALES.updateOne({ _id: result.insertedId }, { $set: { emailNotification } });
+    created = { ...created, emailNotification };
+    console.error(`Order email failed: ${error.message}`);
+  }
+  return created;
 };
 
 const updateSale = async (id, updates) => {
