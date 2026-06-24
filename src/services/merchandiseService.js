@@ -65,6 +65,9 @@ const buildFilter = async (query) => {
   if (query.isVisible !== undefined) {
     filter.isVisible = query.isVisible === 'true' || query.isVisible === true;
   }
+  if (query.isNewArrival !== undefined) {
+    filter.isNewArrival = query.isNewArrival === 'true' || query.isNewArrival === true;
+  }
   if (query.inStock === 'true' || query.inStock === true) {
     andClauses.push({
       $or: [
@@ -251,10 +254,12 @@ const createMerchandise = async (data) => {
     inventory: normalizeInventory(data),
     purchasePrice: data.purchasePrice ?? 0,
     salePrice: data.salePrice ?? 0,
+    discountPercentage: data.discountPercentage ?? 0,
     retailPrice: data.retailPrice ?? 0,
     currency: data.currency || 'UAH',
     isActive: data.isActive ?? true,
     isVisible: data.isVisible ?? true,
+    isNewArrival: data.isNewArrival ?? false,
     ownershipType: data.ownershipType || 'owned',
     seoTitle: data.seoTitle || null,
     seoDescription: data.seoDescription || null,
@@ -356,10 +361,12 @@ const updateMerchandise = async (id, updates) => {
   }
   if (updates.purchasePrice !== undefined) updatedFields.purchasePrice = updates.purchasePrice;
   if (updates.salePrice !== undefined) updatedFields.salePrice = updates.salePrice;
+  if (updates.discountPercentage !== undefined) updatedFields.discountPercentage = updates.discountPercentage;
   if (updates.retailPrice !== undefined) updatedFields.retailPrice = updates.retailPrice;
   if (updates.currency !== undefined) updatedFields.currency = updates.currency;
   if (updates.isActive !== undefined) updatedFields.isActive = updates.isActive;
   if (updates.isVisible !== undefined) updatedFields.isVisible = updates.isVisible;
+  if (updates.isNewArrival !== undefined) updatedFields.isNewArrival = updates.isNewArrival;
   if (updates.ownershipType !== undefined) updatedFields.ownershipType = updates.ownershipType;
   if (updates.seoTitle !== undefined) updatedFields.seoTitle = updates.seoTitle;
   if (updates.seoDescription !== undefined) updatedFields.seoDescription = updates.seoDescription;

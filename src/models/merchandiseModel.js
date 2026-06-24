@@ -30,10 +30,12 @@ const MerchandiseSchema = {
     },
     purchasePrice: { type: 'decimal', min: 0, default: 0 },
     salePrice: { type: 'decimal', min: 0, default: 0 },
+    discountPercentage: { type: 'decimal', min: 0, max: 100, default: 0 },
     retailPrice: { type: 'decimal', min: 0, default: 0 },
     currency: { type: 'string', enum: VALID_CURRENCIES, default: 'UAH' },
     isActive: { type: 'boolean', default: true },
     isVisible: { type: 'boolean', default: true },
+    isNewArrival: { type: 'boolean', default: false },
     ownershipType: { type: 'string', enum: VALID_OWNERSHIP_TYPES, default: 'owned' },
     createdAt: { type: 'datetime' },
     updatedAt: { type: 'datetime' },
@@ -197,8 +199,16 @@ const normalizeMerchandiseItem = (item) => {
   if (!item) return item;
   return {
     ...item,
+    discountPercentage: Number(item.discountPercentage) || 0,
+    isNewArrival: item.isNewArrival === true,
     inventory: normalizeInventory(item),
   };
+};
+
+const calculateDiscountedPrice = (price, discountPercentage = 0) => {
+  const basePrice = Math.max(0, Number(price) || 0);
+  const discount = Math.min(100, Math.max(0, Number(discountPercentage) || 0));
+  return Math.round(basePrice * (1 - discount / 100) * 100) / 100;
 };
 
 const validateInventory = (data = {}) => {
@@ -351,6 +361,17 @@ const validateMerchandise = (data) => {
     }
   }
 
+  if (data.discountPercentage !== undefined && data.discountPercentage !== null) {
+    if (
+      typeof data.discountPercentage !== 'number' ||
+      !Number.isFinite(data.discountPercentage) ||
+      data.discountPercentage < 0 ||
+      data.discountPercentage > 100
+    ) {
+      errors.push('discountPercentage must be a number between 0 and 100');
+    }
+  }
+
   if (data.currency && !VALID_CURRENCIES.includes(data.currency)) {
     errors.push(`currency must be one of: ${VALID_CURRENCIES.join(', ')}`);
   }
@@ -386,5 +407,6 @@ module.exports = {
   validateSpecValue,
   normalizeInventory,
   normalizeMerchandiseItem,
+  calculateDiscountedPrice,
   validateInventory,
 };

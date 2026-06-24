@@ -60,6 +60,9 @@ const buildSaleItem = (item = {}) => {
     inventoryValueKey: item.inventoryValueKey || null,
     inventoryValueLabel: item.inventoryValueLabel || null,
     quantity,
+    listUnitPrice: toNumber(item.listUnitPrice, unitPrice),
+    discountPercentage: Math.min(100, toNumber(item.discountPercentage)),
+    discountAmount: toNumber(item.discountAmount),
     unitPrice,
     totalPrice,
   };

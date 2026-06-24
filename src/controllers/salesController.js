@@ -3,6 +3,7 @@ const { ApiResponse } = require('../utils/apiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 const cartsService = require('../services/cartsService');
 const ApiError = require('../middleware/ApiError');
+const { calculateDiscountedPrice } = require('../models/merchandiseModel');
 
 const getSales = asyncHandler(async (req, res) => {
   const result = await salesService.getSalesList(req.query);
@@ -28,22 +29,30 @@ const checkout = asyncHandler(async (req, res) => {
   if (!availableItems.length) {
     throw new ApiError('Cart is empty', 400);
   }
-  const items = availableItems.map((cartItem) => ({
-    merchandiseId: cartItem.merchandiseId,
-    sku: cartItem.product.sku,
-    name: cartItem.product.name,
-    image: cartItem.product.images?.[0] || null,
-    selectedAttributes: cartItem.inventoryValueLabel
-      ? [{ label: cartItem.product.inventory?.tracked_attribute?.attribute_label || '', value: cartItem.inventoryValueLabel }]
-      : [],
-    inventoryAttributeKey: cartItem.product.inventory?.tracked_attribute?.attribute_key || null,
-    inventoryAttributeLabel: cartItem.product.inventory?.tracked_attribute?.attribute_label || null,
-    inventoryValueKey: cartItem.inventoryValueKey,
-    inventoryValueLabel: cartItem.inventoryValueLabel,
-    quantity: cartItem.quantity,
-    unitPrice: cartItem.product.salePrice,
-    totalPrice: cartItem.product.salePrice * cartItem.quantity,
-  }));
+  const items = availableItems.map((cartItem) => {
+    const listUnitPrice = Math.max(0, Number(cartItem.product.salePrice) || 0);
+    const discountPercentage = Math.min(100, Math.max(0, Number(cartItem.product.discountPercentage) || 0));
+    const unitPrice = calculateDiscountedPrice(listUnitPrice, discountPercentage);
+    return {
+      merchandiseId: cartItem.merchandiseId,
+      sku: cartItem.product.sku,
+      name: cartItem.product.name,
+      image: cartItem.product.images?.[0] || null,
+      selectedAttributes: cartItem.inventoryValueLabel
+        ? [{ label: cartItem.product.inventory?.tracked_attribute?.attribute_label || '', value: cartItem.inventoryValueLabel }]
+        : [],
+      inventoryAttributeKey: cartItem.product.inventory?.tracked_attribute?.attribute_key || null,
+      inventoryAttributeLabel: cartItem.product.inventory?.tracked_attribute?.attribute_label || null,
+      inventoryValueKey: cartItem.inventoryValueKey,
+      inventoryValueLabel: cartItem.inventoryValueLabel,
+      quantity: cartItem.quantity,
+      listUnitPrice,
+      discountPercentage,
+      discountAmount: Math.round((listUnitPrice - unitPrice) * cartItem.quantity * 100) / 100,
+      unitPrice,
+      totalPrice: Math.round(unitPrice * cartItem.quantity * 100) / 100,
+    };
+  });
   availableItems.forEach((cartItem) => {
     const inventory = cartItem.product.inventory;
     const available = inventory.tracked_attribute
@@ -60,6 +69,7 @@ const checkout = asyncHandler(async (req, res) => {
     orderNumber: req.body.orderNumber || `UN-${Date.now().toString(36).toUpperCase()}`,
     items,
     subtotal,
+    discountTotal: 0,
     grandTotal: subtotal + Math.max(0, Number(req.body.shippingCost || 0)),
   });
   await cartsService.clear(userId, guestId);
