@@ -10,6 +10,7 @@ const VALID_SALE_STATUSES = [
 const VALID_PAYMENT_METHODS = [
   'card',
   'cash_on_delivery',
+  'google_pay',
   'bank_transfer',
   'online',
 ];
@@ -51,6 +52,9 @@ const buildSaleItem = (item = {}) => {
 
   return {
     merchandiseId: item.merchandiseId || null,
+    merchandiseSlug: item.merchandiseSlug || null,
+    categoryId: item.categoryId || null,
+    categorySlug: item.categorySlug || null,
     sku: item.sku || '',
     name: item.name || '',
     image: item.image || null,
@@ -109,6 +113,9 @@ const normalizeSale = (data = {}) => {
       status: data.payment?.status || 'unpaid',
       transactionId: data.payment?.transactionId || '',
       paidAt: data.payment?.paidAt ? new Date(data.payment.paidAt) : null,
+      cardNetwork: data.payment?.cardNetwork || null,
+      cardDetails: data.payment?.cardDetails || null,
+      tokenizationType: data.payment?.tokenizationType || null,
     },
     items,
     subtotal,

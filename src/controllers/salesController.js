@@ -10,6 +10,11 @@ const getSales = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success(result.data, 'Sales retrieved successfully', result.pagination));
 });
 
+const getMySales = asyncHandler(async (req, res) => {
+  const result = await salesService.getUserSalesList(req.auth.sub, req.query);
+  res.status(200).json(ApiResponse.success(result.data, 'Sales retrieved successfully', result.pagination));
+});
+
 const getSaleById = asyncHandler(async (req, res) => {
   const item = await salesService.getSaleById(req.params.id);
   res.status(200).json(ApiResponse.success(item, 'Sale retrieved successfully'));
@@ -35,6 +40,9 @@ const checkout = asyncHandler(async (req, res) => {
     const unitPrice = calculateDiscountedPrice(listUnitPrice, discountPercentage);
     return {
       merchandiseId: cartItem.merchandiseId,
+      merchandiseSlug: cartItem.product.slug || null,
+      categoryId: cartItem.product.categoryId ? String(cartItem.product.categoryId) : null,
+      categorySlug: cartItem.product.categorySlug || null,
       sku: cartItem.product.sku,
       name: cartItem.product.name,
       image: cartItem.product.images?.[0] || null,
@@ -88,6 +96,7 @@ const deleteSale = asyncHandler(async (req, res) => {
 
 module.exports = {
   getSales,
+  getMySales,
   getSaleById,
   createSale,
   checkout,

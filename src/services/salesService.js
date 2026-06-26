@@ -5,14 +5,81 @@ const { normalizeSale, validateSale } = require('../models/saleModel');
 const { normalizeInventory } = require('../models/merchandiseModel');
 const novaPoshtaService = require('./novaPoshtaService');
 const mailService = require('./mailService');
+const smsService = require('./smsService');
 
 const isValidId = (id) => ObjectId.isValid(id);
 
-const buildFilter = (query = {}) => {
+const getCategoryFilterIds = async (categoryId) => {
+  if (!categoryId) return [];
+  if (!isValidId(categoryId)) throw new ApiError('Invalid categoryId format', 400);
+
+  const categoryObjectId = new ObjectId(categoryId);
+  const categories = await collections.CATEGORIES
+    .find({
+      deletedAt: null,
+      $or: [{ _id: categoryObjectId }, { parentId: categoryObjectId }],
+    })
+    .project({ _id: 1 })
+    .toArray();
+
+  return categories.map((category) => category._id);
+};
+
+const getMerchandiseIdsByCategory = async (categoryId) => {
+  const categoryIds = await getCategoryFilterIds(categoryId);
+  if (!categoryIds.length) return [];
+
+  const merchandise = await collections.MERCHANDISE
+    .find({ deletedAt: null, categoryId: { $in: categoryIds } })
+    .project({ _id: 1 })
+    .toArray();
+
+  return merchandise.map((item) => String(item._id));
+};
+
+const hydrateSaleItems = async (sales = []) => {
+  const merchandiseIds = [
+    ...new Set(sales.flatMap((sale) =>
+      (sale.items || [])
+        .map((item) => item.merchandiseId)
+        .filter((id) => id && isValidId(id))
+    )),
+  ];
+
+  if (!merchandiseIds.length) return sales;
+
+  const merchandise = await collections.MERCHANDISE
+    .find({ _id: { $in: merchandiseIds.map((id) => new ObjectId(id)) } })
+    .project({ slug: 1, categoryId: 1, categorySlug: 1 })
+    .toArray();
+  const merchandiseById = new Map(merchandise.map((item) => [String(item._id), item]));
+
+  return sales.map((sale) => ({
+    ...sale,
+    items: (sale.items || []).map((item) => {
+      const product = item.merchandiseId ? merchandiseById.get(String(item.merchandiseId)) : null;
+      if (!product) return item;
+
+      return {
+        ...item,
+        merchandiseSlug: item.merchandiseSlug || product.slug || null,
+        categoryId: item.categoryId || (product.categoryId ? String(product.categoryId) : null),
+        categorySlug: item.categorySlug || product.categorySlug || null,
+      };
+    }),
+  }));
+};
+
+const buildFilter = async (query = {}) => {
   const filter = { deletedAt: null };
 
+  if (query.userId) filter.userId = query.userId;
   if (query.status) filter.status = query.status;
   if (query.paymentStatus) filter['payment.status'] = query.paymentStatus;
+  if (query.categoryId) {
+    const merchandiseIds = await getMerchandiseIdsByCategory(query.categoryId);
+    filter['items.merchandiseId'] = merchandiseIds.length ? { $in: merchandiseIds } : { $in: ['__no_merchandise__'] };
+  }
   if (query.search) {
     const re = new RegExp(query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     filter.$or = [
@@ -31,7 +98,7 @@ const getSalesList = async (query = {}) => {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
   const skip = (page - 1) * limit;
-  const filter = buildFilter(query);
+  const filter = await buildFilter(query);
 
   const cursor = collections.SALES
     .find(filter)
@@ -39,15 +106,30 @@ const getSalesList = async (query = {}) => {
     .skip(skip)
     .limit(limit);
 
-  const [items, total] = await Promise.all([
+  const [items, total, totals] = await Promise.all([
     cursor.toArray(),
     collections.SALES.countDocuments(filter),
+    collections.SALES.aggregate([
+      { $match: filter },
+      { $group: { _id: null, grandTotal: { $sum: '$grandTotal' } } },
+    ]).toArray(),
   ]);
 
   return {
-    data: items,
-    pagination: { total, page, limit, pages: Math.ceil(total / limit) },
+    data: await hydrateSaleItems(items),
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+      grandTotal: totals[0]?.grandTotal || 0,
+    },
   };
+};
+
+const getUserSalesList = async (userId, query = {}) => {
+  if (!userId) throw new ApiError('Authentication required', 401);
+  return getSalesList({ ...query, userId });
 };
 
 const getSaleById = async (id) => {
@@ -212,6 +294,23 @@ const createSale = async (data) => {
     created = { ...created, emailNotification };
     console.error(`Order email failed: ${error.message}`);
   }
+  try {
+    const notification = await smsService.sendOrderSmsNotification(created);
+    const smsNotification = {
+      status: notification.sent ? 'sent' : notification.reason,
+      sentAt: notification.sent ? new Date() : null,
+      recipient: notification.recipient || null,
+      missingConfig: notification.missing || [],
+      providerResponse: notification.providerResponse || null,
+    };
+    await collections.SALES.updateOne({ _id: result.insertedId }, { $set: { smsNotification } });
+    created = { ...created, smsNotification };
+  } catch (error) {
+    const smsNotification = { status: 'failed', sentAt: null, error: error.message };
+    await collections.SALES.updateOne({ _id: result.insertedId }, { $set: { smsNotification } });
+    created = { ...created, smsNotification };
+    console.error(`Order SMS failed: ${error.message}`);
+  }
   return created;
 };
 
@@ -265,6 +364,7 @@ const deleteSale = async (id) => {
 
 module.exports = {
   getSalesList,
+  getUserSalesList,
   getSaleById,
   createSale,
   updateSale,

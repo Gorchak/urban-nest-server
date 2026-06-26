@@ -17,6 +17,7 @@ const salesRoutes = require('./routes/salesRoutes');
 const novaPoshtaRoutes = require('./routes/novaPoshtaRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const cartsRoutes = require('./routes/cartsRoutes');
+const seoRoutes = require('./routes/seoRoutes');
 
 // ── Cloudinary config guard ────────────────────────────────────────────────────
 if (
@@ -86,6 +87,7 @@ app.use('/api/sales', salesRoutes);
 app.use('/api/nova-poshta', novaPoshtaRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/carts', cartsRoutes);
+app.use('/', seoRoutes);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);

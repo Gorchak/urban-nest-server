@@ -9,7 +9,10 @@ const escapeHtml = (value) => String(value ?? '')
   .replace(/'/g, '&#039;');
 
 const formatPrice = (value, currency = 'UAH') =>
-  `${Number(value || 0).toLocaleString('uk-UA')} ${escapeHtml(currency)}`;
+  `${Number(value || 0).toLocaleString('uk-UA', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} ${escapeHtml(currency)}`;
 
 const deliveryNames = {
   nova_poshta: '&#1053;&#1086;&#1074;&#1072; &#1087;&#1086;&#1096;&#1090;&#1072;',
@@ -21,6 +24,7 @@ const paymentNames = {
   cash_on_delivery: '&#1055;&#1088;&#1080; &#1086;&#1090;&#1088;&#1080;&#1084;&#1072;&#1085;&#1085;&#1110;',
   bank_transfer: '&#1041;&#1072;&#1085;&#1082;&#1110;&#1074;&#1089;&#1100;&#1082;&#1080;&#1081; &#1087;&#1077;&#1088;&#1077;&#1082;&#1072;&#1079;',
   card: '&#1050;&#1072;&#1088;&#1090;&#1082;&#1086;&#1102;',
+  google_pay: 'Google Pay',
   online: '&#1054;&#1085;&#1083;&#1072;&#1081;&#1085;',
 };
 
