@@ -7,6 +7,7 @@ let cachedTokenExpiresAt = 0;
 
 const getAuth0Config = () => {
   const domain = process.env.AUTH0_DOMAIN;
+  const spaClientId = process.env.AUTH0_SPA_CLIENT_ID || process.env.AUTH0_PUBLIC_CLIENT_ID;
   const clientId = process.env.AUTH0_CLIENT_ID;
   const clientSecret = process.env.AUTH0_CLIENT_SECRET;
   const audience = process.env.AUTH0_AUDIENCE || (domain ? `https://${domain}/api/v2/` : '');
@@ -19,7 +20,7 @@ const getAuth0Config = () => {
     );
   }
 
-  return { domain, clientId, clientSecret, audience, connection };
+  return { domain, spaClientId, clientId, clientSecret, audience, connection };
 };
 
 const requestJson = async (url, options = {}) => {
@@ -166,6 +167,9 @@ const update = async (id, updates) => {
   if (typeof updates.email === 'string' && updates.email.trim()) {
     currentUser = await managementRequest(`/users/${encodeUserId(id)}`);
     if ((currentUser.email || '').toLowerCase() !== updates.email.trim().toLowerCase()) {
+      if (!canUpdateRootProfileAttributes(currentUser)) {
+        throw new ApiError('Auth0 does not allow changing email for this identity provider.', 400);
+      }
       body.email = updates.email.trim();
     }
   }
@@ -205,11 +209,11 @@ const sendPasswordReset = async (id) => {
   const user = await getById(id);
   if (!user.email) throw new ApiError('User email is required for password reset', 400);
 
-  const { domain, clientId, connection } = getAuth0Config();
+  const { domain, spaClientId, clientId, connection } = getAuth0Config();
   await requestJson(`https://${domain}/dbconnections/change_password`, {
     method: 'POST',
     body: JSON.stringify({
-      client_id: clientId,
+      client_id: spaClientId || clientId,
       email: user.email,
       connection,
     }),
