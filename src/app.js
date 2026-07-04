@@ -30,12 +30,32 @@ if (
 
 const app = express();
 
+const defaultAllowedOrigins = [
+  'http://localhost:4200',
+  'http://uliastore.com.ua',
+  'https://uliastore.com.ua',
+];
+
+const configuredAllowedOrigins = [
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
+  process.env.SITE_URL,
+  ...(process.env.CORS_ORIGINS || '').split(','),
+]
+  .map((origin) => String(origin || '').trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredAllowedOrigins]);
+
 const corsOptions = {
-  origin: [
-    'http://localhost:4200',
-    'http://uliastore.com.ua',
-    'https://uliastore.com.ua',
-  ],
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin.replace(/\/+$/, ''))) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -44,6 +64,7 @@ const corsOptions = {
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(compression());
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
