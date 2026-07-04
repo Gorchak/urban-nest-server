@@ -1,5 +1,5 @@
 const DEFAULT_ORDER_SMS_RECIPIENT = '+380679403549';
-const DEFAULT_ADMIN_SALES_URL = 'https://urban-nest-dev.netlify.app/admin/sales';
+const DEFAULT_ADMIN_SALES_URL = 'http://uliastore.com.ua/admin/sales';
 
 const normalizePhone = (value = DEFAULT_ORDER_SMS_RECIPIENT) => {
   const digits = String(value || '').replace(/\D/g, '');

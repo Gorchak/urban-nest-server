@@ -1,6 +1,6 @@
 const { collections } = require('../config/collections');
 
-const DEFAULT_SITE_URL = 'https://urban-nest-dev.netlify.app';
+const DEFAULT_SITE_URL = 'http://uliastore.com.ua';
 
 const trimTrailingSlash = (value) => String(value || '').replace(/\/+$/, '');
 
