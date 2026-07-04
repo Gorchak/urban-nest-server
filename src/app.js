@@ -34,6 +34,8 @@ const defaultAllowedOrigins = [
   'http://localhost:4200',
   'http://uliastore.com.ua',
   'https://uliastore.com.ua',
+  'http://www.uliastore.com.ua',
+  'https://www.uliastore.com.ua',
 ];
 
 const configuredAllowedOrigins = [
@@ -47,18 +49,37 @@ const configuredAllowedOrigins = [
 
 const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredAllowedOrigins]);
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+
+  const normalizedOrigin = origin.replace(/\/+$/, '');
+  if (allowedOrigins.has(normalizedOrigin)) return true;
+
+  try {
+    const { hostname, protocol } = new URL(normalizedOrigin);
+    return ['http:', 'https:'].includes(protocol) && (
+      hostname === 'uliastore.com.ua' ||
+      hostname === 'www.uliastore.com.ua' ||
+      hostname === 'localhost'
+    );
+  } catch {
+    return false;
+  }
+};
+
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin.replace(/\/+$/, ''))) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
 
-    callback(new Error(`Not allowed by CORS: ${origin}`));
+    callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
 };
 
 app.use(helmet({ crossOriginResourcePolicy: false }));

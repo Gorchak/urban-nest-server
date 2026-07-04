@@ -27,7 +27,7 @@ cp .env.example .env
 | CLIENT_URL | Primary Angular frontend URL allowed by CORS | http://uliastore.com.ua |
 | FRONTEND_URL | Optional frontend URL alias used by CORS and SEO | http://uliastore.com.ua |
 | SITE_URL | Public site URL used by generated SEO files | http://uliastore.com.ua |
-| CORS_ORIGINS | Comma-separated extra frontend origins allowed by CORS | http://uliastore.com.ua,https://uliastore.com.ua |
+| CORS_ORIGINS | Comma-separated extra frontend origins allowed by CORS | http://uliastore.com.ua,https://uliastore.com.ua,http://www.uliastore.com.ua,https://www.uliastore.com.ua |
 | MONGODB_URI | MongoDB Atlas connection string | - |
 | NODE_ENV | Environment | development |
 | ORDER_SMS_RECIPIENT | Phone number that receives order SMS notifications | +380679403549 |
