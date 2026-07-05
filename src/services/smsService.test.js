@@ -31,7 +31,7 @@ describe('order SMS notifications', () => {
       grandTotal: 12500,
       currency: 'UAH',
     }, {
-      adminSalesUrl: 'http://uliastore.com.ua/admin/sales',
+      adminSalesUrl: 'https://urban-nest-dev.netlify.app/admin/sales',
     });
 
     expect(text).toContain('Оформлено замовлення UN-123');
@@ -41,6 +41,6 @@ describe('order SMS notifications', () => {
     expect(text).toContain('Телефон: +380679403549');
     expect(text).toContain('Доставка: Нова пошта');
     expect(text).toContain('Адреса: Київська, Київ, Відділення 1');
-    expect(text).toContain('http://uliastore.com.ua/admin/sales');
+    expect(text).toContain('https://urban-nest-dev.netlify.app/admin/sales');
   });
 });

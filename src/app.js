@@ -30,62 +30,19 @@ if (
 
 const app = express();
 
-const defaultAllowedOrigins = [
-  'http://localhost:4200',
-  'http://uliastore.com.ua',
-  'https://uliastore.com.ua',
-  'http://www.uliastore.com.ua',
-  'https://www.uliastore.com.ua',
-];
-
-const configuredAllowedOrigins = [
-  process.env.CLIENT_URL,
-  process.env.FRONTEND_URL,
-  process.env.SITE_URL,
-  ...(process.env.CORS_ORIGINS || '').split(','),
-]
-  .map((origin) => String(origin || '').trim().replace(/\/+$/, ''))
-  .filter(Boolean);
-
-const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredAllowedOrigins]);
-
-const isAllowedOrigin = (origin) => {
-  if (!origin) return true;
-
-  const normalizedOrigin = origin.replace(/\/+$/, '');
-  if (allowedOrigins.has(normalizedOrigin)) return true;
-
-  try {
-    const { hostname, protocol } = new URL(normalizedOrigin);
-    return ['http:', 'https:'].includes(protocol) && (
-      hostname === 'uliastore.com.ua' ||
-      hostname === 'www.uliastore.com.ua' ||
-      hostname === 'localhost'
-    );
-  } catch {
-    return false;
-  }
-};
-
 const corsOptions = {
-  origin(origin, callback) {
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-      return;
-    }
-
-    callback(null, false);
-  },
+  origin: [
+    'http://localhost:4200',
+    'https://urban-nest-dev.netlify.app',
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 204,
 };
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(compression());
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
