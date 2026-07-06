@@ -10,6 +10,11 @@ const getSales = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success(result.data, 'Sales retrieved successfully', result.pagination));
 });
 
+const getFinanceTotals = asyncHandler(async (req, res) => {
+  const result = await salesService.getFinanceTotalList(req.query);
+  res.status(200).json(ApiResponse.success(result.data, 'Sales totals retrieved successfully', result.pagination));
+});
+
 const getMySales = asyncHandler(async (req, res) => {
   const result = await salesService.getUserSalesList(req.auth.sub, req.query);
   res.status(200).json(ApiResponse.success(result.data, 'Sales retrieved successfully', result.pagination));
@@ -96,6 +101,7 @@ const deleteSale = asyncHandler(async (req, res) => {
 
 module.exports = {
   getSales,
+  getFinanceTotals,
   getMySales,
   getSaleById,
   createSale,

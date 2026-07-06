@@ -9,6 +9,7 @@ const merchandiseController = require('../controllers/merchandiseController');
 // DELETE /api/merchandise/:id   → soft delete
 
 router.get('/', merchandiseController.getMerchandise);
+router.get('/finance/prices', merchandiseController.getFinancePrices);
 router.get('/slug/:slug', merchandiseController.getMerchandiseBySlug);
 router.get('/:id', merchandiseController.getMerchandiseById);
 router.post('/', merchandiseController.createMerchandise);

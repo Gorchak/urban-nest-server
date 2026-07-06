@@ -7,6 +7,7 @@ const COLLECTIONS = {
   CATEGORIES: 'categories',
   MERCHANDISE: 'merchandise',
   SALES: 'sales',
+  EXPENSES: 'expenses',
   CARTS: 'carts',
 };
 

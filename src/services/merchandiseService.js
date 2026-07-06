@@ -168,6 +168,48 @@ const getMerchandiseList = async (query = {}) => {
   };
 };
 
+const getFinancePriceList = async (query = {}) => {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 50));
+  const skip = (page - 1) * limit;
+  const filter = { deletedAt: null };
+
+  if (query.fromDate) {
+    filter.createdAt = filter.createdAt || {};
+    filter.createdAt.$gte = new Date(query.fromDate);
+  }
+  if (query.toDate) {
+    filter.createdAt = filter.createdAt || {};
+    filter.createdAt.$lte = new Date(query.toDate);
+  }
+
+  const cursor = collections.MERCHANDISE
+    .find(filter)
+    .project({ purchasePrice: 1, createdAt: 1 })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const [items, total] = await Promise.all([
+    cursor.toArray(),
+    collections.MERCHANDISE.countDocuments(filter),
+  ]);
+
+  return {
+    data: items.map((item) => ({
+      _id: String(item._id),
+      purchasePrice: Number(item.purchasePrice) || 0,
+      createdAt: item.createdAt,
+    })),
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    },
+  };
+};
+
 /**
  * Returns merchandise items filtered by categoryId or categorySlug.
  * Uses the same underlying getMerchandiseList with category filter applied.
@@ -402,6 +444,7 @@ const deleteMerchandise = async (id) => {
 
 module.exports = {
   getMerchandiseList,
+  getFinancePriceList,
   getMerchandiseById,
   getMerchandiseBySlug,
   getMerchandiseByCategory,

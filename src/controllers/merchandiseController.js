@@ -9,6 +9,13 @@ const getMerchandise = asyncHandler(async (req, res) => {
   );
 });
 
+const getFinancePrices = asyncHandler(async (req, res) => {
+  const result = await merchandiseService.getFinancePriceList(req.query);
+  res.status(200).json(
+    ApiResponse.success(result.data, 'Merchandise prices retrieved successfully', result.pagination)
+  );
+});
+
 const getMerchandiseById = asyncHandler(async (req, res) => {
   const item = await merchandiseService.getMerchandiseById(req.params.id);
   res.status(200).json(ApiResponse.success(item, 'Merchandise retrieved successfully'));
@@ -36,6 +43,7 @@ const deleteMerchandise = asyncHandler(async (req, res) => {
 
 module.exports = {
   getMerchandise,
+  getFinancePrices,
   getMerchandiseById,
   getMerchandiseBySlug,
   createMerchandise,

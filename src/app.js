@@ -14,6 +14,7 @@ const categoriesRoutes = require('./routes/categoriesRoutes');
 const referencesRoutes = require('./routes/referencesRoutes');
 const merchandiseRoutes = require('./routes/merchandiseRoutes');
 const salesRoutes = require('./routes/salesRoutes');
+const expensesRoutes = require('./routes/expensesRoutes');
 const novaPoshtaRoutes = require('./routes/novaPoshtaRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const cartsRoutes = require('./routes/cartsRoutes');
@@ -70,6 +71,7 @@ app.get('/api', (req, res) => {
       references: '/api/references',
       merchandise: '/api/merchandise',
       sales: '/api/sales',
+      expenses: '/api/expenses',
       novaPoshta: '/api/nova-poshta',
       upload: '/api/upload',
       carts: '/api/carts',
@@ -84,6 +86,7 @@ app.use('/api/categories', categoriesRoutes);
 app.use('/api/references', referencesRoutes);
 app.use('/api/merchandise', merchandiseRoutes);
 app.use('/api/sales', salesRoutes);
+app.use('/api/expenses', expensesRoutes);
 app.use('/api/nova-poshta', novaPoshtaRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/carts', cartsRoutes);
