@@ -34,7 +34,10 @@ const app = express();
 const corsOptions = {
   origin: [
     'http://localhost:4200',
-    'https://urban-nest-dev.netlify.app',
+    'http://uliastore.com.ua',
+    'https://uliastore.com.ua',
+    'http://www.uliastore.com.ua',
+    'https://www.uliastore.com.ua',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
