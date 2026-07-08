@@ -1,6 +1,6 @@
 const { collections } = require('../config/collections');
 
-const DEFAULT_SITE_URL = 'http://uliastore.com.ua';
+const DEFAULT_SITE_URL = 'https://uliastore.com.ua';
 
 const trimTrailingSlash = (value) => String(value || '').replace(/\/+$/, '');
 
