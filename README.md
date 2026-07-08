@@ -24,14 +24,14 @@ cp .env.example .env
 | Variable | Description | Default |
 |---|---|---|
 | PORT | Server port | 3000 |
-| CLIENT_URL | Angular frontend URL | https://uliastore.com.ua |
+| CLIENT_URL | Angular frontend URL | http://uliastore.com.ua |
 | MONGODB_URI | MongoDB Atlas connection string | - |
 | NODE_ENV | Environment | development |
 | ORDER_SMS_RECIPIENT | Phone number that receives order SMS notifications | +380679403549 |
 | SMS_PROVIDER_URL | HTTP endpoint used to send order SMS notifications | - |
 | SMS_API_TOKEN | Bearer token for the SMS provider endpoint | - |
 | SMS_SENDER | Sender name passed to the SMS provider | UrbanNest |
-| ADMIN_SALES_URL | Admin sales page URL included in order notifications | https://uliastore.com.ua/admin/sales |
+| ADMIN_SALES_URL | Admin sales page URL included in order notifications | http://uliastore.com.ua/admin/sales |
 
 `ORDER_SMS_RECIPIENT` accepts `0679403549`, `380679403549`, or `+380679403549`; the server normalizes it to `+380679403549` before sending.
 
