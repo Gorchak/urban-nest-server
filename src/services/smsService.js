@@ -8,7 +8,7 @@ const formatPrice = (value, currency = 'UAH') =>
 
 const deliveryNames = {
   nova_poshta: 'Нова пошта',
-  courier: 'Кур’єр',
+  courier: 'Курʼєр',
   pickup: 'Самовивіз',
 };
 

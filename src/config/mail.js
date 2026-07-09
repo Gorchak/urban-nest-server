@@ -1,4 +1,4 @@
-const DEFAULT_ADMIN_ORDER_EMAIL = 'gorchakua@gmail.com';
+const DEFAULT_ADMIN_ORDER_EMAIL = 'Uliaconcept@gmail.com';
 
 const getMailConfig = () => ({
   adminOrderEmail: process.env.ADMIN_ORDER_EMAIL || process.env.ORDER_NOTIFICATION_EMAIL || DEFAULT_ADMIN_ORDER_EMAIL,

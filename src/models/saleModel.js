@@ -138,7 +138,6 @@ const validateSale = (data = {}) => {
   if (!VALID_SALE_STATUSES.includes(data.status || 'pending_payment')) {
     errors.push(`status must be one of: ${VALID_SALE_STATUSES.join(', ')}`);
   }
-  if (!data.customer?.firstName) errors.push('customer.firstName is required');
   if (!data.customer?.phone) errors.push('customer.phone is required');
   if (!Array.isArray(data.items) || data.items.length === 0) {
     errors.push('items must contain at least one product');

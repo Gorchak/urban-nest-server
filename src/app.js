@@ -18,6 +18,7 @@ const expensesRoutes = require('./routes/expensesRoutes');
 const novaPoshtaRoutes = require('./routes/novaPoshtaRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const cartsRoutes = require('./routes/cartsRoutes');
+const favoritesRoutes = require('./routes/favoritesRoutes');
 const seoRoutes = require('./routes/seoRoutes');
 
 // ── Cloudinary config guard ────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ app.get('/api', (req, res) => {
       novaPoshta: '/api/nova-poshta',
       upload: '/api/upload',
       carts: '/api/carts',
+      favorites: '/api/favorites',
     },
   });
 });
@@ -93,6 +95,7 @@ app.use('/api/expenses', expensesRoutes);
 app.use('/api/nova-poshta', novaPoshtaRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/carts', cartsRoutes);
+app.use('/api/favorites', favoritesRoutes);
 app.use('/', seoRoutes);
 
 app.use(notFoundHandler);

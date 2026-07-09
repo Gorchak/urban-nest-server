@@ -2,10 +2,11 @@ const { ObjectId } = require('mongodb');
 const { collections } = require('../config/collections');
 const ApiError = require('../middleware/ApiError');
 const { normalizeSale, validateSale } = require('../models/saleModel');
-const { normalizeInventory } = require('../models/merchandiseModel');
+const { normalizeInventory, calculateDiscountedPrice } = require('../models/merchandiseModel');
 const novaPoshtaService = require('./novaPoshtaService');
 const mailService = require('./mailService');
 const smsService = require('./smsService');
+const userService = require('./userService');
 
 const isValidId = (id) => ObjectId.isValid(id);
 
@@ -356,6 +357,76 @@ const createSale = async (data) => {
   return created;
 };
 
+const createQuickOrder = async (data = {}) => {
+  const phone = userService.normalizePhone(data.phone || '');
+  if (!phone) throw new ApiError('Phone is required', 400);
+  if (!data.merchandiseId || !isValidId(data.merchandiseId)) {
+    throw new ApiError('Valid merchandiseId is required', 400);
+  }
+
+  const product = await collections.MERCHANDISE.findOne({
+    _id: new ObjectId(data.merchandiseId),
+    deletedAt: null,
+    isActive: true,
+    isVisible: true,
+  });
+  if (!product) throw new ApiError('Merchandise not found', 404);
+
+  const inventory = normalizeInventory(product);
+  const variant = data.inventoryValueKey
+    ? inventory.attribute_quantities.find((row) => row.value_key === data.inventoryValueKey)
+    : null;
+  if (inventory.tracked_attribute && !variant) {
+    throw new ApiError('Product option is required', 400);
+  }
+
+  const available = inventory.tracked_attribute ? Number(variant?.quantity || 0) : Number(inventory.total_quantity || 0);
+  if (available < 1) throw new ApiError('Product is out of stock', 400);
+
+  const user = await userService.findOrCreateByPhone(phone);
+  const listUnitPrice = Math.max(0, Number(product.salePrice) || 0);
+  const discountPercentage = Math.min(100, Math.max(0, Number(product.discountPercentage) || 0));
+  const unitPrice = calculateDiscountedPrice(listUnitPrice, discountPercentage);
+  const item = {
+    merchandiseId: String(product._id),
+    merchandiseSlug: product.slug || null,
+    categoryId: product.categoryId ? String(product.categoryId) : null,
+    categorySlug: product.categorySlug || null,
+    sku: product.sku,
+    name: product.name,
+    image: product.images?.[0] || null,
+    selectedAttributes: variant
+      ? [{ label: inventory.tracked_attribute?.attribute_label || '', value: variant.value_label }]
+      : [],
+    inventoryAttributeKey: inventory.tracked_attribute?.attribute_key || null,
+    inventoryAttributeLabel: inventory.tracked_attribute?.attribute_label || null,
+    inventoryValueKey: variant?.value_key || null,
+    inventoryValueLabel: variant?.value_label || null,
+    quantity: 1,
+    listUnitPrice,
+    discountPercentage,
+    discountAmount: Math.round((listUnitPrice - unitPrice) * 100) / 100,
+    unitPrice,
+    totalPrice: unitPrice,
+  };
+
+  return createSale({
+    orderNumber: data.orderNumber || `QO-${Date.now().toString(36).toUpperCase()}`,
+    userId: user.userId,
+    status: 'processing',
+    customer: { firstName: '', lastName: '', phone, email: '' },
+    shippingAddress: { country: 'Ukraine' },
+    payment: { method: 'cash_on_delivery', status: 'unpaid' },
+    items: [item],
+    subtotal: unitPrice,
+    discountTotal: 0,
+    shippingCost: 0,
+    grandTotal: unitPrice,
+    currency: product.currency || 'UAH',
+    notes: 'Швидке замовлення: Купити в 1 клік',
+  });
+};
+
 const updateSale = async (id, updates) => {
   if (!isValidId(id)) throw new ApiError('Invalid sale ID format', 400);
   const existing = await getSaleById(id);
@@ -410,6 +481,7 @@ module.exports = {
   getUserSalesList,
   getSaleById,
   createSale,
+  createQuickOrder,
   updateSale,
   deleteSale,
 };

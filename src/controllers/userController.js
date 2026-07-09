@@ -20,6 +20,13 @@ const updateUser = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success(user, 'User updated successfully'));
 });
 
+const createUser = asyncHandler(async (req, res) => {
+  const payload = { ...req.body };
+  if (!req.canManageUsers) delete payload.appMetadata;
+  const user = await userService.create(payload);
+  res.status(201).json(ApiResponse.success(user, 'User created successfully'));
+});
+
 const updateUserPassword = asyncHandler(async (req, res) => {
   const user = await userService.updatePassword(req.params.id, req.body.password);
   res.status(200).json(ApiResponse.success(user, 'User password updated successfully'));
@@ -30,4 +37,4 @@ const sendPasswordReset = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success(result, 'Password reset email sent successfully'));
 });
 
-module.exports = { getUsers, getUserById, updateUser, updateUserPassword, sendPasswordReset };
+module.exports = { getUsers, getUserById, createUser, updateUser, updateUserPassword, sendPasswordReset };

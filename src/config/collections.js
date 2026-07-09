@@ -9,6 +9,7 @@ const COLLECTIONS = {
   SALES: 'sales',
   EXPENSES: 'expenses',
   CARTS: 'carts',
+  FAVORITES: 'favorites',
 };
 
 const collections = {};

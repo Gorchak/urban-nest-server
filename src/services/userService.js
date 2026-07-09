@@ -1,4 +1,5 @@
 const ApiError = require('../middleware/ApiError');
+const crypto = require('crypto');
 
 const AUTH0_TIMEOUT_MS = 15000;
 
@@ -21,6 +22,21 @@ const getAuth0Config = () => {
   }
 
   return { domain, spaClientId, clientId, clientSecret, audience, connection };
+};
+
+const getSmsConnection = () => process.env.AUTH0_SMS_CONNECTION || 'sms';
+const PHONE_ONLY_EMAIL_DOMAIN = process.env.AUTH0_PHONE_ONLY_EMAIL_DOMAIN || 'uliastore.com.ua';
+
+const normalizePhone = (value = '') => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length === 10 && digits.startsWith('0')) return `+38${digits}`;
+  if (digits.length === 12 && digits.startsWith('380')) return `+${digits}`;
+  return String(value || '').trim();
+};
+
+const phoneOnlyEmail = (phone) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return `phone-${digits || crypto.randomBytes(6).toString('hex')}@${PHONE_ONLY_EMAIL_DOMAIN}`;
 };
 
 const requestJson = async (url, options = {}) => {
@@ -98,8 +114,10 @@ const managementRequest = async (path, options = {}) => {
 
 const normalizeUser = (user) => ({
   userId: user.user_id,
-  email: user.email || '',
+  email: user.app_metadata?.phoneOnly ? '' : user.email || '',
   emailVerified: Boolean(user.email_verified),
+  phoneNumber: user.phone_number || user.user_metadata?.phone || '',
+  phoneVerified: Boolean(user.phone_verified),
   name: user.name || '',
   nickname: user.nickname || '',
   picture: user.user_metadata?.avatarUrl || user.picture || '',
@@ -137,7 +155,7 @@ const getAll = async (query = {}, options = {}) => {
 
   if (search) {
     const escaped = String(search).replace(/"/g, '\\"');
-    params.set('q', `email:*${escaped}* OR name:*${escaped}* OR nickname:*${escaped}*`);
+    params.set('q', `email:*${escaped}* OR name:*${escaped}* OR nickname:*${escaped}* OR phone_number:*${escaped}* OR user_metadata.phone:*${escaped}*`);
     params.set('search_engine', 'v3');
   }
 
@@ -157,6 +175,86 @@ const getAll = async (query = {}, options = {}) => {
 const getById = async (id) => {
   if (!id) throw new ApiError('User ID is required', 400);
   return normalizeUser(await managementRequest(`/users/${encodeUserId(id)}`));
+};
+
+const buildUserMetadata = (data = {}) => ({
+  ...(data.userMetadata || {}),
+  firstName: data.userMetadata?.firstName || data.firstName || '',
+  lastName: data.userMetadata?.lastName || data.lastName || '',
+  middleName: data.userMetadata?.middleName || data.middleName || '',
+  phone: normalizePhone(data.userMetadata?.phone || data.phone || ''),
+  residentialAddress: data.userMetadata?.residentialAddress || data.residentialAddress || '',
+  avatarUrl: data.userMetadata?.avatarUrl || data.avatarUrl || '',
+  delivery: data.userMetadata?.delivery || {},
+});
+
+const create = async (data = {}) => {
+  const email = String(data.email || '').trim();
+  const phone = normalizePhone(data.phone || data.userMetadata?.phone || '');
+  if (!email && !phone) throw new ApiError('Email or phone is required', 400);
+
+  const userMetadata = buildUserMetadata({ ...data, phone });
+  const appMetadata = data.appMetadata && typeof data.appMetadata === 'object' ? data.appMetadata : {};
+  const body = email
+    ? {
+        connection: getAuth0Config().connection,
+        email,
+        email_verified: false,
+        password: data.password || crypto.randomBytes(18).toString('base64url'),
+        name: data.name || [userMetadata.firstName, userMetadata.lastName].filter(Boolean).join(' ').trim() || email,
+        user_metadata: userMetadata,
+        app_metadata: appMetadata,
+      }
+    : {
+        connection: getSmsConnection(),
+        phone_number: phone,
+        phone_verified: false,
+        user_metadata: userMetadata,
+        app_metadata: appMetadata,
+      };
+
+  try {
+    return normalizeUser(await managementRequest('/users', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }));
+  } catch (error) {
+    if (email || !/connection does not exist/i.test(error.message || '')) throw error;
+
+    const fallbackBody = {
+      connection: getAuth0Config().connection,
+      email: phoneOnlyEmail(phone),
+      email_verified: false,
+      password: data.password || crypto.randomBytes(18).toString('base64url'),
+      name: phone,
+      user_metadata: userMetadata,
+      app_metadata: { ...appMetadata, phoneOnly: true },
+    };
+    return normalizeUser(await managementRequest('/users', {
+      method: 'POST',
+      body: JSON.stringify(fallbackBody),
+    }));
+  }
+};
+
+const findByPhone = async (phone) => {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+  const escaped = normalized.replace(/"/g, '\\"');
+  const params = new URLSearchParams({
+    q: `phone_number:"${escaped}" OR user_metadata.phone:"${escaped}"`,
+    search_engine: 'v3',
+    per_page: '1',
+  });
+  const result = await managementRequest(`/users?${params.toString()}`);
+  const user = Array.isArray(result) ? result[0] : result?.users?.[0];
+  return user ? normalizeUser(user) : null;
+};
+
+const findOrCreateByPhone = async (phone) => {
+  const existing = await findByPhone(phone);
+  if (existing) return existing;
+  return create({ phone });
 };
 
 const update = async (id, updates) => {
@@ -225,7 +323,11 @@ const sendPasswordReset = async (id) => {
 module.exports = {
   getAll,
   getById,
+  create,
+  findByPhone,
+  findOrCreateByPhone,
   update,
   updatePassword,
   sendPasswordReset,
+  normalizePhone,
 };

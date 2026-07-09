@@ -2,6 +2,7 @@ const salesService = require('../services/salesService');
 const { ApiResponse } = require('../utils/apiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 const cartsService = require('../services/cartsService');
+const userService = require('../services/userService');
 const ApiError = require('../middleware/ApiError');
 const { calculateDiscountedPrice } = require('../models/merchandiseModel');
 
@@ -28,6 +29,11 @@ const getSaleById = asyncHandler(async (req, res) => {
 const createSale = asyncHandler(async (req, res) => {
   const item = await salesService.createSale(req.body);
   res.status(201).json(ApiResponse.success(item, 'Sale created successfully'));
+});
+
+const quickOrder = asyncHandler(async (req, res) => {
+  const item = await salesService.createQuickOrder(req.body);
+  res.status(201).json(ApiResponse.success(item, 'Quick order created successfully'));
 });
 
 const checkout = asyncHandler(async (req, res) => {
@@ -76,9 +82,12 @@ const checkout = asyncHandler(async (req, res) => {
     }
   });
   const subtotal = items.reduce((sum, saleItem) => sum + saleItem.totalPrice, 0);
+  const saleUserId = userId || (req.body.quickOrder && req.body.customer?.phone
+    ? (await userService.findOrCreateByPhone(req.body.customer.phone)).userId
+    : null);
   const item = await salesService.createSale({
     ...req.body,
-    userId,
+    userId: saleUserId,
     orderNumber: req.body.orderNumber || `UN-${Date.now().toString(36).toUpperCase()}`,
     items,
     subtotal,
@@ -105,6 +114,7 @@ module.exports = {
   getMySales,
   getSaleById,
   createSale,
+  quickOrder,
   checkout,
   updateSale,
   deleteSale,

@@ -9,6 +9,7 @@ const allowAuthenticatedUserManagement = (req, _res, next) => {
 };
 
 router.get('/', protectAuth0, userController.getUsers);
+router.post('/', protectAuth0, allowAuthenticatedUserManagement, userController.createUser);
 router.get('/:id', protectAuth0, allowAuthenticatedUserManagement, userController.getUserById);
 router.put('/:id', protectAuth0, allowAuthenticatedUserManagement, userController.updateUser);
 router.post('/:id/password', protectAuth0, allowAuthenticatedUserManagement, userController.updateUserPassword);
