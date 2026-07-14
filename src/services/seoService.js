@@ -35,13 +35,18 @@ const urlEntry = ({ loc, lastmod, changefreq = 'weekly', priority = '0.7' }) => 
 
 const getSitemapXml = async () => {
   const siteUrl = getSiteUrl();
-  const [categories, products] = await Promise.all([
+  const [categories, products, brands] = await Promise.all([
     collections.CATEGORIES.find({
       deletedAt: null,
       isActive: true,
       isVisible: true,
     }).project({ slug: 1, updatedAt: 1 }).toArray(),
     collections.MERCHANDISE.find({
+      deletedAt: null,
+      isActive: true,
+      isVisible: true,
+    }).project({ slug: 1, updatedAt: 1 }).toArray(),
+    collections.BRANDS.find({
       deletedAt: null,
       isActive: true,
       isVisible: true,
@@ -64,6 +69,14 @@ const getSitemapXml = async () => {
       .map((product) => urlEntry({
         loc: `${siteUrl}/product/${routeSegment(product.slug)}`,
         lastmod: product.updatedAt,
+        changefreq: 'weekly',
+        priority: '0.7',
+      })),
+    ...brands
+      .filter((brand) => brand.slug)
+      .map((brand) => urlEntry({
+        loc: `${siteUrl}/brand/${routeSegment(brand.slug)}`,
+        lastmod: brand.updatedAt,
         changefreq: 'weekly',
         priority: '0.7',
       })),

@@ -145,7 +145,7 @@ const getFinanceTotalList = async (query = {}) => {
 
   const cursor = collections.SALES
     .find(filter)
-    .project({ grandTotal: 1, createdAt: 1 })
+    .project({ grandTotal: 1, createdAt: 1, 'payment.status': 1 })
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
@@ -159,6 +159,7 @@ const getFinanceTotalList = async (query = {}) => {
     data: items.map((item) => ({
       _id: String(item._id),
       grandTotal: Number(item.grandTotal) || 0,
+      paymentStatus: item.payment?.status || 'unpaid',
       createdAt: item.createdAt,
     })),
     pagination: {

@@ -9,6 +9,7 @@ const { ObjectId } = require('mongodb');
 const { collections } = require('../config/collections');
 const ApiError = require('../middleware/ApiError');
 const categoriesService = require('./categoriesService');
+const { escapeRegex, searchTerms } = require('../utils/search');
 const {
   generateSlug,
   validateMerchandise,
@@ -18,6 +19,21 @@ const {
 } = require('../models/merchandiseModel');
 
 const isValidId = (id) => ObjectId.isValid(id);
+
+const descendantCategoryIds = (matchedIds, categories) => {
+  const ids = new Set(matchedIds.map(String));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const category of categories) {
+      if (category.parentId && ids.has(String(category.parentId)) && !ids.has(String(category._id))) {
+        ids.add(String(category._id));
+        changed = true;
+      }
+    }
+  }
+  return [...ids].map((id) => new ObjectId(id));
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -58,6 +74,21 @@ const buildFilter = async (query) => {
   }
   if (query.categorySlug) {
     filter.categorySlug = query.categorySlug;
+  }
+  if (query.brandId) {
+    if (!isValidId(query.brandId)) throw new ApiError('Invalid brandId format', 400);
+    filter.brandId = new ObjectId(query.brandId);
+  }
+  if (query.brandSlug) {
+    const brand = await collections.BRANDS.findOne({ slug: query.brandSlug, deletedAt: null });
+    const legacyValues = [query.brandSlug, brand?.name].filter(Boolean).map((value) => new RegExp(`^${String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
+    andClauses.push({
+      $or: [
+        { brandSlug: query.brandSlug },
+        ...(brand?._id ? [{ brandId: brand._id }] : []),
+        { specifications: { $elemMatch: { slug: { $in: ['brand', 'brend', 'бренд'] }, value: { $in: legacyValues } } } },
+      ],
+    });
   }
   if (query.isActive !== undefined) {
     filter.isActive = query.isActive === 'true' || query.isActive === true;
@@ -105,8 +136,42 @@ const buildFilter = async (query) => {
     if (query.maxPrice !== undefined) filter.salePrice.$lte = Number(query.maxPrice);
   }
   if (query.search) {
-    const re = new RegExp(query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    andClauses.push({ $or: [{ name: re }, { sku: re }] });
+    const terms = searchTerms(query.search);
+    const [categories, brands] = await Promise.all([
+      collections.CATEGORIES.find({ deletedAt: null }).project({ name: 1, slug: 1, parentId: 1 }).toArray(),
+      collections.BRANDS.find({ deletedAt: null, isActive: true }).project({ name: 1, slug: 1 }).toArray(),
+    ]);
+
+    if (!terms.length) {
+      andClauses.push({ _id: { $exists: false } });
+    }
+
+    for (const term of terms) {
+      const re = new RegExp(escapeRegex(term), 'i');
+      const matchingCategoryIds = descendantCategoryIds(
+        categories
+          .filter((category) => re.test(`${category.name || ''} ${category.slug || ''}`))
+          .map((category) => category._id),
+        categories
+      );
+      const matchingBrandIds = brands
+        .filter((brand) => re.test(`${brand.name || ''} ${brand.slug || ''}`))
+        .map((brand) => brand._id);
+
+      andClauses.push({
+        $or: [
+          { name: re },
+          { sku: re },
+          { shortDescription: re },
+          { description: re },
+          { categorySlug: re },
+          { brandSlug: re },
+          { 'specifications.value': re },
+          ...(matchingCategoryIds.length ? [{ categoryId: { $in: matchingCategoryIds } }] : []),
+          ...(matchingBrandIds.length ? [{ brandId: { $in: matchingBrandIds } }] : []),
+        ],
+      });
+    }
   }
   if (query.fromDate) {
     filter.createdAt = filter.createdAt || {};
@@ -277,6 +342,13 @@ const createMerchandise = async (data) => {
   const now = new Date();
   const slug = data.slug || generateSlug(data.name);
 
+  let brand = null;
+  if (data.brandId) {
+    if (!isValidId(data.brandId)) throw new ApiError('Invalid brandId format', 400);
+    brand = await collections.BRANDS.findOne({ _id: new ObjectId(data.brandId), deletedAt: null, isActive: true });
+    if (!brand) throw new ApiError('Brand not found', 404);
+  }
+
   // 5. Check slug uniqueness
   const existingSlug = await collections.MERCHANDISE.findOne({ slug, deletedAt: null });
   if (existingSlug) throw new ApiError(`Slug "${slug}" already exists`, 409);
@@ -287,6 +359,8 @@ const createMerchandise = async (data) => {
     slug,
     categoryId: new ObjectId(data.categoryId),
     categorySlug: category.slug,
+    brandId: brand ? brand._id : null,
+    brandSlug: brand ? brand.slug : null,
     description: data.description || null,
     shortDescription: data.shortDescription || null,
     specifications: Array.isArray(data.specifications)
@@ -372,6 +446,19 @@ const updateMerchandise = async (id, updates) => {
   }
 
   const updatedFields = { updatedAt: new Date() };
+
+  if (updates.brandId !== undefined) {
+    if (updates.brandId === null || updates.brandId === '') {
+      updatedFields.brandId = null;
+      updatedFields.brandSlug = null;
+    } else {
+      if (!isValidId(updates.brandId)) throw new ApiError('Invalid brandId format', 400);
+      const brand = await collections.BRANDS.findOne({ _id: new ObjectId(updates.brandId), deletedAt: null, isActive: true });
+      if (!brand) throw new ApiError('Brand not found', 404);
+      updatedFields.brandId = brand._id;
+      updatedFields.brandSlug = brand.slug;
+    }
+  }
 
   if (updates.sku !== undefined) updatedFields.sku = updates.sku.trim();
   if (updates.name !== undefined) updatedFields.name = updates.name.trim();

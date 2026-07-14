@@ -17,6 +17,8 @@ const MerchandiseSchema = {
     slug: { type: 'string', required: true, pattern: /^[a-z0-9]+(?:-[a-z0-9]+)*$/ },
     categoryId: { type: 'string', required: true, format: 'objectId' },
     categorySlug: { type: 'string', required: true },
+    brandId: { type: 'string', format: 'objectId', nullable: true },
+    brandSlug: { type: 'string', nullable: true },
     description: { type: 'text', maxLength: 10000 },
     shortDescription: { type: 'string', maxLength: 1000 },
     images: { type: 'array', items: { type: 'string' }, default: [] },
