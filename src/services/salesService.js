@@ -428,6 +428,14 @@ const createQuickOrder = async (data = {}) => {
   });
 };
 
+const setCheckboxFiscalization = async (id, checkboxFiscalization) => {
+  const objectId = id instanceof ObjectId ? id : new ObjectId(id);
+  await collections.SALES.updateOne(
+    { _id: objectId, deletedAt: null },
+    { $set: { checkboxFiscalization, updatedAt: new Date() } }
+  );
+};
+
 const updateSale = async (id, updates) => {
   if (!isValidId(id)) throw new ApiError('Invalid sale ID format', 400);
   const existing = await getSaleById(id);
@@ -483,6 +491,7 @@ module.exports = {
   getSaleById,
   createSale,
   createQuickOrder,
+  setCheckboxFiscalization,
   updateSale,
   deleteSale,
 };

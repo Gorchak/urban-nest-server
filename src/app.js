@@ -21,6 +21,7 @@ const cartsRoutes = require('./routes/cartsRoutes');
 const favoritesRoutes = require('./routes/favoritesRoutes');
 const seoRoutes = require('./routes/seoRoutes');
 const brandsRoutes = require('./routes/brandsRoutes');
+const checkboxRoutes = require('./routes/checkboxRoutes');
 
 // ── Cloudinary config guard ────────────────────────────────────────────────────
 if (
@@ -82,6 +83,7 @@ app.get('/api', (req, res) => {
       carts: '/api/carts',
       favorites: '/api/favorites',
       brands: '/api/brands',
+      checkbox: '/api/checkbox',
     },
   });
 });
@@ -99,6 +101,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/carts', cartsRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/brands', brandsRoutes);
+app.use('/api/checkbox', checkboxRoutes);
 app.use('/', seoRoutes);
 
 app.use(notFoundHandler);

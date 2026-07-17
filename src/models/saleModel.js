@@ -34,6 +34,8 @@ const SaleSchema = {
     currency: { type: 'string', default: 'UAH' },
     notes: { type: 'text', nullable: true },
     doNotCall: { type: 'boolean', default: false },
+    source: { type: 'string', default: 'website' },
+    checkboxFiscalization: { type: 'object', nullable: true },
     createdAt: { type: 'datetime' },
     updatedAt: { type: 'datetime' },
     deletedAt: { type: 'datetime', nullable: true },
@@ -125,6 +127,8 @@ const normalizeSale = (data = {}) => {
     currency: data.currency || 'UAH',
     notes: data.notes || null,
     doNotCall: Boolean(data.doNotCall),
+    source: data.source || 'website',
+    checkboxFiscalization: data.checkboxFiscalization || null,
     inventoryAdjustment: data.inventoryAdjustment || { state: 'none', updatedAt: null },
   };
 };

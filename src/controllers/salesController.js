@@ -5,6 +5,8 @@ const cartsService = require('../services/cartsService');
 const userService = require('../services/userService');
 const ApiError = require('../middleware/ApiError');
 const { calculateDiscountedPrice } = require('../models/merchandiseModel');
+const checkboxService = require('../services/checkboxService');
+const { getCheckboxConfig } = require('../config/checkbox');
 
 const getSales = asyncHandler(async (req, res) => {
   const result = await salesService.getSalesList(req.query);
@@ -94,6 +96,28 @@ const checkout = asyncHandler(async (req, res) => {
     discountTotal: 0,
     grandTotal: subtotal + Math.max(0, Number(req.body.shippingCost || 0)),
   });
+  if (getCheckboxConfig().autoFiscalize && item.payment?.status === 'paid') {
+    try {
+      const fiscalized = await checkboxService.fiscalizeSale(item);
+      await salesService.setCheckboxFiscalization(item._id, {
+        status: fiscalized.receipt?.status || 'CREATED',
+        receiptId: fiscalized.id,
+        fiscalCode: fiscalized.receipt?.fiscal_code || null,
+        fiscalizedAt: fiscalized.receipt?.fiscal_date || null,
+        updatedAt: new Date(),
+      });
+    } catch (error) {
+      await salesService.setCheckboxFiscalization(item._id, {
+        status: 'failed',
+        receiptId: null,
+        fiscalCode: null,
+        fiscalizedAt: null,
+        error: error.message,
+        updatedAt: new Date(),
+      });
+      console.error(`Checkbox fiscalization failed for ${item.orderNumber}: ${error.message}`);
+    }
+  }
   await cartsService.clear(userId, guestId);
   res.status(201).json(ApiResponse.success(item, 'Order created successfully'));
 });
