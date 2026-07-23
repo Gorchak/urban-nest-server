@@ -27,6 +27,9 @@ cp .env.example .env
 | CLIENT_URL | Angular frontend URL | http://uliastore.com.ua |
 | MONGODB_URI | MongoDB Atlas connection string | - |
 | NODE_ENV | Environment | development |
+| ADMIN_ORDER_EMAIL | Recipient of new-order email notifications | Uliaconcept@gmail.com |
+| RESEND_API_KEY | Resend API key with permission to send email | - |
+| RESEND_FROM_EMAIL | Sender on the domain verified in Resend | - |
 | ORDER_SMS_RECIPIENT | Phone number that receives order SMS notifications | +380679403549 |
 | SMS_PROVIDER_URL | HTTP endpoint used to send order SMS notifications | - |
 | SMS_API_TOKEN | Bearer token for the SMS provider endpoint | - |
@@ -34,6 +37,11 @@ cp .env.example .env
 | ADMIN_SALES_URL | Admin sales page URL included in order notifications | http://uliastore.com.ua/admin/sales |
 
 `ORDER_SMS_RECIPIENT` accepts `0679403549`, `380679403549`, or `+380679403549`; the server normalizes it to `+380679403549` before sending.
+
+Order emails are sent through Resend after a sale is created. Set `RESEND_FROM_EMAIL`
+to an address on the verified domain, for example
+`Urban Nest <orders@uliastore.com.ua>`. The address does not need a separate
+mailbox in Resend, but using a reply-capable address is recommended.
 
 ## Scripts
 

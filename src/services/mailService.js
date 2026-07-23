@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const { getMailConfig, getMissingMailConfig } = require('../config/mail');
 
 const escapeHtml = (value) => String(value ?? '')
@@ -125,21 +125,22 @@ const sendOrderNotification = async (sale) => {
     return { sent: false, reason: 'not_configured', missing };
   }
 
-  const transport = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: { user: config.user, pass: config.pass },
-  });
-  const info = await transport.sendMail({
+  const resend = new Resend(config.apiKey);
+  const { data, error } = await resend.emails.send({
     from: config.from,
     to: config.adminOrderEmail,
     replyTo: sale.customer?.email || undefined,
     subject: `New order ${sale.orderNumber} - ${formatPrice(sale.grandTotal, sale.currency)}`,
     text: renderOrderText(sale),
     html: renderOrderEmail(sale),
+  }, {
+    idempotencyKey: `order-${sale.orderNumber}`,
   });
-  return { sent: true, messageId: info.messageId, recipient: config.adminOrderEmail };
+  if (error) {
+    throw new Error(`Resend API error: ${error.message || JSON.stringify(error)}`);
+  }
+
+  return { sent: true, messageId: data.id, recipient: config.adminOrderEmail };
 };
 
 module.exports = { sendOrderNotification, renderOrderEmail, renderOrderText };

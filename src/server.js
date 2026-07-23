@@ -1,5 +1,10 @@
 require('dotenv').config();
-require('dotenv').config({ path: '.env.local', override: true });
+
+// .env.local is a developer override and must never replace secrets supplied by
+// the hosting platform in production.
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: '.env.local', override: true });
+}
 const app = require('./app');
 const { connectDB, closeDB } = require('./config/database');
 

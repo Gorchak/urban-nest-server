@@ -5,11 +5,12 @@ let db;
 
 const connectDB = async () => {
   try {
-    // Accept both MONGO_URI (Render convention) and MONGODB_URI (legacy)
-    const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+    // MONGODB_URI is the canonical setting documented by this project.
+    // MONGO_URI remains a fallback so existing local environments keep working.
+    const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
 
     if (!uri) {
-      throw new Error('MONGO_URI (or MONGODB_URI) is not defined in environment variables');
+      throw new Error('MONGODB_URI (or legacy MONGO_URI) is not defined in environment variables');
     }
 
     client = new MongoClient(uri, {
@@ -35,6 +36,9 @@ const connectDB = async () => {
     return { client, db };
   } catch (error) {
     console.error(`Failed to connect to MongoDB: ${error.message}`);
+    if (error.code === 8000 || /authentication failed|bad auth/i.test(error.message)) {
+      console.error('MongoDB authentication failed. Verify the MONGODB_URI database-user credentials in the hosting environment.');
+    }
     process.exit(1);
   }
 };
