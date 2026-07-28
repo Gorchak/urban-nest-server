@@ -4,6 +4,7 @@ const asyncHandler = require('../utils/asyncHandler');
 
 const getMerchandise = asyncHandler(async (req, res) => {
   const result = await merchandiseService.getMerchandiseList(req.query);
+  res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=300');
   res.status(200).json(
     ApiResponse.success(result.data, 'Merchandise retrieved successfully', result.pagination)
   );

@@ -54,6 +54,27 @@ const getCollection = (collectionName) => {
   return getDb().collection(collectionName);
 };
 
+const ensurePerformanceIndexes = async () => {
+  const database = getDb();
+  await Promise.all([
+    database.collection('merchandise').createIndexes([
+      { key: { slug: 1, deletedAt: 1 }, name: 'slug_active' },
+      { key: { deletedAt: 1, isActive: 1, isVisible: 1, createdAt: -1 }, name: 'public_catalog' },
+      { key: { deletedAt: 1, isActive: 1, isVisible: 1, isNewArrival: 1, createdAt: -1 }, name: 'new_arrivals' },
+      { key: { categoryId: 1, deletedAt: 1, isActive: 1, isVisible: 1, createdAt: -1 }, name: 'category_catalog' },
+      { key: { brandSlug: 1, deletedAt: 1, isActive: 1, isVisible: 1, createdAt: -1 }, name: 'brand_catalog' },
+    ]),
+    database.collection('categories').createIndex(
+      { deletedAt: 1, isActive: 1, isVisible: 1, sortOrder: 1 },
+      { name: 'visible_categories' }
+    ),
+    database.collection('brands').createIndex(
+      { deletedAt: 1, isActive: 1, isVisible: 1, sortOrder: 1 },
+      { name: 'visible_brands' }
+    ),
+  ]);
+};
+
 const closeDB = async () => {
   if (client) {
     await client.close();
@@ -65,5 +86,6 @@ module.exports = {
   connectDB,
   getDb,
   getCollection,
+  ensurePerformanceIndexes,
   closeDB,
 };

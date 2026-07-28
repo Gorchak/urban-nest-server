@@ -212,15 +212,44 @@ const getMerchandiseList = async (query = {}) => {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
   const skip = (page - 1) * limit;
+  const includeTotal = query.includeTotal !== 'false' && query.includeTotal !== false;
 
   const filter = await buildFilter(query);
   const sort = buildSort(query.sortBy, query.sortOrder);
 
-  const cursor = collections.MERCHANDISE.find(filter).sort(sort).skip(skip).limit(limit);
-  const [items, total] = await Promise.all([
+  let cursor = collections.MERCHANDISE.find(filter);
+  if (query.view === 'card') {
+    cursor = cursor.project({
+      sku: 1,
+      name: 1,
+      slug: 1,
+      categoryId: 1,
+      categorySlug: 1,
+      brandId: 1,
+      brandSlug: 1,
+      shortDescription: 1,
+      images: { $slice: 2 },
+      'inventory.total_quantity': 1,
+      salePrice: 1,
+      discountPercentage: 1,
+      currency: 1,
+      isActive: 1,
+      isVisible: 1,
+      isNewArrival: 1,
+      createdAt: 1,
+    });
+  }
+
+  // Fetch one extra row when an exact total is not required. This avoids an
+  // additional collection scan and still tells infinite-scroll clients if
+  // another page exists.
+  cursor = cursor.sort(sort).skip(skip).limit(includeTotal ? limit : limit + 1);
+  const [rows, total] = await Promise.all([
     cursor.toArray(),
-    collections.MERCHANDISE.countDocuments(filter),
+    includeTotal ? collections.MERCHANDISE.countDocuments(filter) : Promise.resolve(null),
   ]);
+  const hasMore = includeTotal ? page * limit < total : rows.length > limit;
+  const items = rows.slice(0, limit);
 
   return {
     data: items.map(normalizeMerchandiseItem),
@@ -228,7 +257,8 @@ const getMerchandiseList = async (query = {}) => {
       total,
       page,
       limit,
-      pages: Math.ceil(total / limit),
+      pages: includeTotal ? Math.ceil(total / limit) : null,
+      hasMore,
     },
   };
 };

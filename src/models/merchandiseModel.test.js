@@ -1,5 +1,6 @@
 const {
   calculateDiscountedPrice,
+  normalizeInventory,
   validateMerchandise,
 } = require('./merchandiseModel');
 
@@ -28,5 +29,22 @@ describe('merchandise discounts', () => {
     });
 
     expect(errors).toContain('discountPercentage must be a number between 0 and 100');
+  });
+});
+
+describe('merchandise inventory', () => {
+  test('prefers an explicit inventory quantity over a legacy stock quantity', () => {
+    expect(normalizeInventory({
+      stockQuantity: 2,
+      inventory: {
+        total_quantity: 0,
+        tracked_attribute: null,
+        attribute_quantities: [],
+      },
+    })).toEqual({
+      total_quantity: 0,
+      tracked_attribute: null,
+      attribute_quantities: [],
+    });
   });
 });

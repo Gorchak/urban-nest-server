@@ -156,10 +156,13 @@ const normalizeInventory = (data = {}) => {
     ? data.inventory
     : null;
 
+  // The current inventory payload is authoritative when it is present. This is
+  // especially important for partial updates: an existing legacy
+  // `stockQuantity` field must not overwrite an explicitly submitted zero.
   const legacyQuantity =
+    inventory?.total_quantity ??
     data.stockQuantity ??
     data.quantity ??
-    inventory?.total_quantity ??
     0;
 
   if (!inventory) {

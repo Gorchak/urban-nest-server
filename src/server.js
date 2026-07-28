@@ -6,7 +6,7 @@ if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config({ path: '.env.local', override: true });
 }
 const app = require('./app');
-const { connectDB, closeDB } = require('./config/database');
+const { connectDB, ensurePerformanceIndexes, closeDB } = require('./config/database');
 
 const PORT = process.env.PORT || 3000;
 
@@ -14,6 +14,7 @@ let server;
 
 const startServer = async () => {
   await connectDB();
+  await ensurePerformanceIndexes();
 
   server = app.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
