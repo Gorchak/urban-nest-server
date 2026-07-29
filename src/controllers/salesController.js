@@ -7,6 +7,7 @@ const ApiError = require('../middleware/ApiError');
 const { calculateDiscountedPrice } = require('../models/merchandiseModel');
 const checkboxService = require('../services/checkboxService');
 const { getCheckboxConfig } = require('../config/checkbox');
+const wayForPayService = require('../services/wayForPayService');
 
 const getSales = asyncHandler(async (req, res) => {
   const result = await salesService.getSalesList(req.query);
@@ -87,10 +88,38 @@ const checkout = asyncHandler(async (req, res) => {
   const saleUserId = userId || (req.body.quickOrder && req.body.customer?.phone
     ? (await userService.findOrCreateByPhone(req.body.customer.phone)).userId
     : null);
+  const orderNumber = req.body.orderNumber || `UN-${Date.now().toString(36).toUpperCase()}`;
+  let payment = { ...req.body.payment, status: 'unpaid', transactionId: '', paidAt: null };
+  let status = req.body.status;
+
+  if (req.body.payment?.method === 'google_pay') {
+    const charge = await wayForPayService.chargeGooglePay({
+      orderReference: orderNumber,
+      amount: subtotal + Math.max(0, Number(req.body.shippingCost || 0)),
+      currency: req.body.currency || 'UAH',
+      items,
+      customer: req.body.customer,
+      clientIp: req.ip,
+      googlePay: req.body.payment.googlePay,
+    });
+    payment = {
+      ...payment,
+      status: 'paid',
+      transactionId: charge.authCode || charge.orderReference || orderNumber,
+      paidAt: new Date(),
+      cardNetwork: charge.cardType || req.body.payment.googlePay?.cardNetwork || null,
+      cardDetails: charge.cardPan || req.body.payment.googlePay?.cardDetails || null,
+      tokenizationType: req.body.payment.googlePay?.tokenizationType || null,
+    };
+    status = 'processing';
+  }
+
   const item = await salesService.createSale({
     ...req.body,
     userId: saleUserId,
-    orderNumber: req.body.orderNumber || `UN-${Date.now().toString(36).toUpperCase()}`,
+    orderNumber,
+    status,
+    payment,
     items,
     subtotal,
     discountTotal: 0,

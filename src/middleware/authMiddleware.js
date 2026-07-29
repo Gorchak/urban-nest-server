@@ -92,8 +92,17 @@ const optionalAuth0 = asyncHandler(async (req, res, next) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return next();
-  const payload = await verifyAuth0Token(token);
-  req.auth = { sub: payload.sub, email: payload.email || null };
+
+  try {
+    const payload = await verifyAuth0Token(token);
+    req.auth = { sub: payload.sub, email: payload.email || null };
+  } catch (error) {
+    // Optional authentication must not turn public guest flows (cart and
+    // checkout) into protected endpoints when Auth0 leaves a stale token in
+    // browser storage. Required-auth routes still use protectAuth0.
+    if (error?.statusCode !== 401) throw error;
+    delete req.auth;
+  }
   next();
 });
 
