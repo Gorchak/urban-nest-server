@@ -57,17 +57,13 @@ const buildFilter = async (query) => {
   if (query.categoryId) {
     if (!isValidId(query.categoryId)) throw new ApiError('Invalid categoryId format', 400);
     if (query.includeChildren === 'true' || query.includeChildren === true) {
-      // Include items from parent category and all its children
-      // First get all child category IDs
-      const childCategories = await collections.CATEGORIES.find({
-        $or: [
-          { _id: new ObjectId(query.categoryId) },
-          { parentId: new ObjectId(query.categoryId) },
-        ],
-        deletedAt: null,
-      }).toArray();
-      const childIds = childCategories.map(c => c._id);
-      filter.categoryId = { $in: childIds };
+      const categories = await collections.CATEGORIES
+        .find({ deletedAt: null })
+        .project({ _id: 1, parentId: 1 })
+        .toArray();
+      filter.categoryId = {
+        $in: descendantCategoryIds([new ObjectId(query.categoryId)], categories),
+      };
     } else {
       filter.categoryId = new ObjectId(query.categoryId);
     }
