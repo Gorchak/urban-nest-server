@@ -1,9 +1,28 @@
 const crypto = require('crypto');
+const net = require('net');
 const ApiError = require('../middleware/ApiError');
 const { getWayForPayConfig, getMissingWayForPayConfig } = require('../config/wayForPay');
 
 const hmacMd5 = (value, key) => crypto.createHmac('md5', key).update(value, 'utf8').digest('hex');
 const money = (value) => Math.max(0, Number(value) || 0).toFixed(2);
+
+const normalizeIpv4 = (...sources) => {
+  const candidates = sources
+    .flat(Infinity)
+    .filter(Boolean)
+    .flatMap((value) => String(value).split(','))
+    .map((value) => value.trim().replace(/^"|"$/g, ''));
+
+  for (let candidate of candidates) {
+    if (candidate.startsWith('::ffff:')) candidate = candidate.slice(7);
+    if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(candidate)) {
+      candidate = candidate.slice(0, candidate.lastIndexOf(':'));
+    }
+    if (net.isIPv4(candidate)) return candidate;
+  }
+
+  return null;
+};
 
 const buildSignature = (request, secretKey) => hmacMd5([
   request.merchantAccount,
@@ -23,6 +42,7 @@ const chargeGooglePay = async ({ orderReference, amount, currency, items, custom
   if (!googlePay?.token) throw new ApiError('Google Pay token is required', 400);
 
   const config = getWayForPayConfig();
+  const normalizedClientIp = normalizeIpv4(clientIp);
   const request = {
     apiVersion: 1,
     transactionType: 'CHARGE',
@@ -40,7 +60,7 @@ const chargeGooglePay = async ({ orderReference, amount, currency, items, custom
     clientCountry: 'UKR',
     clientEmail: customer?.email || '',
     clientPhone: customer?.phone || '',
-    clientIpAddress: clientIp || '',
+    ...(normalizedClientIp ? { clientIpAddress: normalizedClientIp } : {}),
     merchantTransactionType: 'SALE',
     merchantTransactionSecureType: 'NON3DS',
     gpApiVersionMinor: Number(googlePay.apiVersionMinor) || 0,
@@ -73,4 +93,4 @@ const chargeGooglePay = async ({ orderReference, amount, currency, items, custom
   return result;
 };
 
-module.exports = { buildSignature, chargeGooglePay };
+module.exports = { buildSignature, chargeGooglePay, normalizeIpv4 };

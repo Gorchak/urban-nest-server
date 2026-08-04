@@ -99,7 +99,7 @@ const checkout = asyncHandler(async (req, res) => {
       currency: req.body.currency || 'UAH',
       items,
       customer: req.body.customer,
-      clientIp: req.ip,
+      clientIp: [req.ip, req.ips, req.socket?.remoteAddress],
       googlePay: req.body.payment.googlePay,
     });
     payment = {

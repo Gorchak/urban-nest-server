@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { buildSignature } = require('./wayForPayService');
+const { buildSignature, normalizeIpv4 } = require('./wayForPayService');
 
 describe('wayForPayService', () => {
   test('builds the documented purchase signature in the required field order', () => {
@@ -18,5 +18,15 @@ describe('wayForPayService', () => {
     const expected = crypto.createHmac('md5', 'secret').update(base, 'utf8').digest('hex');
 
     expect(buildSignature(request, 'secret')).toBe(expected);
+  });
+
+  test.each([
+    [['203.0.113.42'], '203.0.113.42'],
+    [['::ffff:203.0.113.42'], '203.0.113.42'],
+    [['203.0.113.42:54321'], '203.0.113.42'],
+    [['2001:db8::1', '198.51.100.7, 10.0.0.1'], '198.51.100.7'],
+    [['2001:db8::1'], null],
+  ])('normalizes a WayForPay-compatible IPv4 address', (sources, expected) => {
+    expect(normalizeIpv4(sources)).toBe(expected);
   });
 });

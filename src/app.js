@@ -34,6 +34,10 @@ if (
 
 const app = express();
 
+// The production API runs behind Render's reverse proxy. Trust one proxy hop
+// so req.ip resolves to the shopper rather than the proxy address.
+app.set('trust proxy', 1);
+
 const corsOptions = {
   origin: [
     'http://localhost:4200',
