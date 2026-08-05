@@ -4,7 +4,9 @@ const ApiError = require('../middleware/ApiError');
 const { getWayForPayConfig, getMissingWayForPayConfig } = require('../config/wayForPay');
 
 const hmacMd5 = (value, key) => crypto.createHmac('md5', key).update(value, 'utf8').digest('hex');
-const money = (value) => Math.max(0, Number(value) || 0).toFixed(2);
+const money = (value) => Math.max(0, Number(value) || 0)
+  .toFixed(2)
+  .replace(/\.?0+$/, '');
 
 const normalizeIpv4 = (...sources) => {
   const candidates = sources
@@ -29,11 +31,11 @@ const buildSignature = (request, secretKey) => hmacMd5([
   request.merchantDomainName,
   request.orderReference,
   request.orderDate,
-  money(request.amount),
+  request.amount,
   request.currency,
   ...request.productName,
   ...request.productCount,
-  ...request.productPrice.map(money),
+  ...request.productPrice,
 ].join(';'), secretKey);
 
 const buildHostedPayment = ({ orderReference, amount, currency, items, customer }) => {
@@ -43,24 +45,16 @@ const buildHostedPayment = ({ orderReference, amount, currency, items, customer 
   const config = getWayForPayConfig();
   const request = {
     merchantAccount: config.merchantAccount,
-    merchantAuthType: 'SimpleSignature',
     merchantDomainName: config.merchantDomainName,
     orderReference,
     orderDate: Math.floor(Date.now() / 1000),
     amount: money(amount),
     currency: currency || 'UAH',
-    merchantTransactionType: 'SALE',
     merchantTransactionSecureType: 'AUTO',
-    apiVersion: 1,
-    language: 'UA',
     serviceUrl: config.serviceUrl,
     productName: items.map((item) => item.name),
     productPrice: items.map((item) => money(item.unitPrice)),
     productCount: items.map((item) => item.quantity),
-    clientFirstName: customer?.firstName || '',
-    clientLastName: customer?.lastName || '',
-    clientEmail: customer?.email || '',
-    clientPhone: String(customer?.phone || '').replace(/\D/g, ''),
   };
   if (config.returnUrl) request.returnUrl = config.returnUrl;
   request.merchantSignature = buildSignature(request, config.merchantSecretKey);
