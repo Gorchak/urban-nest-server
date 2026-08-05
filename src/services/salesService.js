@@ -436,6 +436,34 @@ const setCheckboxFiscalization = async (id, checkboxFiscalization) => {
   );
 };
 
+const applyWayForPayCallback = async (payload = {}) => {
+  const orderNumber = String(payload.orderReference || '');
+  const existing = await collections.SALES.findOne({ orderNumber, deletedAt: null });
+  if (!existing) throw new ApiError('Sale not found', 404);
+
+  const callbackAmount = Math.round((Number(payload.amount) || 0) * 100);
+  const saleAmount = Math.round((Number(existing.grandTotal) || 0) * 100);
+  if (callbackAmount !== saleAmount || String(payload.currency || '') !== existing.currency) {
+    throw new ApiError('WayForPay payment amount or currency does not match the order', 400);
+  }
+
+  if (payload.transactionStatus !== 'Approved') return existing;
+  if (existing.payment?.status === 'paid') return existing;
+
+  return updateSale(existing._id, {
+    ...existing,
+    status: 'processing',
+    payment: {
+      ...existing.payment,
+      status: 'paid',
+      transactionId: payload.authCode || orderNumber,
+      paidAt: new Date(),
+      cardNetwork: payload.cardType || null,
+      cardDetails: payload.cardPan || null,
+    },
+  });
+};
+
 const updateSale = async (id, updates) => {
   if (!isValidId(id)) throw new ApiError('Invalid sale ID format', 400);
   const existing = await getSaleById(id);
@@ -492,6 +520,7 @@ module.exports = {
   createSale,
   createQuickOrder,
   setCheckboxFiscalization,
+  applyWayForPayCallback,
   updateSale,
   deleteSale,
 };

@@ -36,6 +36,81 @@ const buildSignature = (request, secretKey) => hmacMd5([
   ...request.productPrice.map(money),
 ].join(';'), secretKey);
 
+const buildHostedPayment = ({ orderReference, amount, currency, items, customer }) => {
+  const missing = getMissingWayForPayConfig();
+  if (missing.length) throw new ApiError(`WayForPay config missing: ${missing.join(', ')}`, 503);
+
+  const config = getWayForPayConfig();
+  const request = {
+    merchantAccount: config.merchantAccount,
+    merchantAuthType: 'SimpleSignature',
+    merchantDomainName: config.merchantDomainName,
+    orderReference,
+    orderDate: Math.floor(Date.now() / 1000),
+    amount: money(amount),
+    currency: currency || 'UAH',
+    merchantTransactionType: 'SALE',
+    merchantTransactionSecureType: 'AUTO',
+    apiVersion: 1,
+    language: 'UA',
+    serviceUrl: config.serviceUrl,
+    paymentSystems: 'googlePay;applePay',
+    defaultPaymentSystem: 'googlePay',
+    productName: items.map((item) => item.name),
+    productPrice: items.map((item) => money(item.unitPrice)),
+    productCount: items.map((item) => item.quantity),
+    clientFirstName: customer?.firstName || '',
+    clientLastName: customer?.lastName || '',
+    clientEmail: customer?.email || '',
+    clientPhone: String(customer?.phone || '').replace(/\D/g, ''),
+  };
+  if (config.returnUrl) request.returnUrl = config.returnUrl;
+  request.merchantSignature = buildSignature(request, config.merchantSecretKey);
+
+  const fields = Object.entries(request).flatMap(([name, value]) => {
+    if (!Array.isArray(value)) return [{ name, value: String(value) }];
+    return value.map((entry) => ({ name: `${name}[]`, value: String(entry) }));
+  });
+
+  return { action: config.paymentUrl, method: 'POST', fields };
+};
+
+const callbackSignatureBase = (payload) => [
+  payload.merchantAccount,
+  payload.orderReference,
+  payload.amount,
+  payload.currency,
+  payload.authCode || '',
+  payload.cardPan || '',
+  payload.transactionStatus,
+  payload.reasonCode,
+].join(';');
+
+const signaturesEqual = (left, right) => {
+  const leftBuffer = Buffer.from(String(left || ''), 'utf8');
+  const rightBuffer = Buffer.from(String(right || ''), 'utf8');
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+};
+
+const verifyCallback = (payload = {}) => {
+  const config = getWayForPayConfig();
+  if (!config.merchantAccount || payload.merchantAccount !== config.merchantAccount) return false;
+  const expected = hmacMd5(callbackSignatureBase(payload), config.merchantSecretKey);
+  return signaturesEqual(payload.merchantSignature, expected);
+};
+
+const buildCallbackAcceptance = (orderReference) => {
+  const config = getWayForPayConfig();
+  const time = Math.floor(Date.now() / 1000);
+  const status = 'accept';
+  return {
+    orderReference,
+    status,
+    time,
+    signature: hmacMd5(`${orderReference};${status};${time}`, config.merchantSecretKey),
+  };
+};
+
 const chargeGooglePay = async ({ orderReference, amount, currency, items, customer, clientIp, googlePay }) => {
   const missing = getMissingWayForPayConfig();
   if (missing.length) throw new ApiError(`WayForPay config missing: ${missing.join(', ')}`, 503);
@@ -93,4 +168,11 @@ const chargeGooglePay = async ({ orderReference, amount, currency, items, custom
   return result;
 };
 
-module.exports = { buildSignature, chargeGooglePay, normalizeIpv4 };
+module.exports = {
+  buildSignature,
+  buildHostedPayment,
+  verifyCallback,
+  buildCallbackAcceptance,
+  chargeGooglePay,
+  normalizeIpv4,
+};

@@ -89,30 +89,25 @@ const checkout = asyncHandler(async (req, res) => {
     ? (await userService.findOrCreateByPhone(req.body.customer.phone)).userId
     : null);
   const orderNumber = req.body.orderNumber || `UN-${Date.now().toString(36).toUpperCase()}`;
-  let payment = { ...req.body.payment, status: 'unpaid', transactionId: '', paidAt: null };
-  let status = req.body.status;
-
-  if (req.body.payment?.method === 'google_pay') {
-    const charge = await wayForPayService.chargeGooglePay({
+  const hostedOnlinePayment = ['online', 'google_pay'].includes(req.body.payment?.method);
+  const payment = {
+    ...req.body.payment,
+    method: hostedOnlinePayment ? 'online' : req.body.payment?.method,
+    status: 'unpaid',
+    transactionId: '',
+    paidAt: null,
+    googlePay: undefined,
+  };
+  const status = hostedOnlinePayment ? 'pending_payment' : req.body.status;
+  const paymentRedirect = hostedOnlinePayment
+    ? wayForPayService.buildHostedPayment({
       orderReference: orderNumber,
       amount: subtotal + Math.max(0, Number(req.body.shippingCost || 0)),
       currency: req.body.currency || 'UAH',
       items,
       customer: req.body.customer,
-      clientIp: [req.ip, req.ips, req.socket?.remoteAddress],
-      googlePay: req.body.payment.googlePay,
-    });
-    payment = {
-      ...payment,
-      status: 'paid',
-      transactionId: charge.authCode || charge.orderReference || orderNumber,
-      paidAt: new Date(),
-      cardNetwork: charge.cardType || req.body.payment.googlePay?.cardNetwork || null,
-      cardDetails: charge.cardPan || req.body.payment.googlePay?.cardDetails || null,
-      tokenizationType: req.body.payment.googlePay?.tokenizationType || null,
-    };
-    status = 'processing';
-  }
+    })
+    : null;
 
   const item = await salesService.createSale({
     ...req.body,
@@ -148,7 +143,36 @@ const checkout = asyncHandler(async (req, res) => {
     }
   }
   await cartsService.clear(userId, guestId);
-  res.status(201).json(ApiResponse.success(item, 'Order created successfully'));
+  res.status(201).json(ApiResponse.success(
+    paymentRedirect ? { ...item, paymentRedirect } : item,
+    'Order created successfully'
+  ));
+});
+
+const wayForPayCallback = asyncHandler(async (req, res) => {
+  if (!wayForPayService.verifyCallback(req.body)) {
+    throw new ApiError('Invalid WayForPay callback signature', 400);
+  }
+  const item = await salesService.applyWayForPayCallback(req.body);
+  if (
+    req.body.transactionStatus === 'Approved'
+    && getCheckboxConfig().autoFiscalize
+    && !item.checkboxFiscalization?.receiptId
+  ) {
+    try {
+      const fiscalized = await checkboxService.fiscalizeSale(item);
+      await salesService.setCheckboxFiscalization(item._id, {
+        status: fiscalized.receipt?.status || 'CREATED',
+        receiptId: fiscalized.id,
+        fiscalCode: fiscalized.receipt?.fiscal_code || null,
+        fiscalizedAt: fiscalized.receipt?.fiscal_date || null,
+        updatedAt: new Date(),
+      });
+    } catch (error) {
+      console.error(`Checkbox fiscalization failed for ${item.orderNumber}: ${error.message}`);
+    }
+  }
+  res.status(200).json(wayForPayService.buildCallbackAcceptance(req.body.orderReference));
 });
 
 const updateSale = asyncHandler(async (req, res) => {
@@ -169,6 +193,7 @@ module.exports = {
   createSale,
   quickOrder,
   checkout,
+  wayForPayCallback,
   updateSale,
   deleteSale,
 };
