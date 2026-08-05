@@ -54,8 +54,6 @@ const buildHostedPayment = ({ orderReference, amount, currency, items, customer 
     apiVersion: 1,
     language: 'UA',
     serviceUrl: config.serviceUrl,
-    paymentSystems: 'googlePay;applePay',
-    defaultPaymentSystem: 'googlePay',
     productName: items.map((item) => item.name),
     productPrice: items.map((item) => money(item.unitPrice)),
     productCount: items.map((item) => item.quantity),
