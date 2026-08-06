@@ -109,7 +109,7 @@ const checkout = asyncHandler(async (req, res) => {
     })
     : null;
 
-  const item = await salesService.createSale({
+  const saleData = {
     ...req.body,
     userId: saleUserId,
     orderNumber,
@@ -119,7 +119,19 @@ const checkout = asyncHandler(async (req, res) => {
     subtotal,
     discountTotal: 0,
     grandTotal: subtotal + Math.max(0, Number(req.body.shippingCost || 0)),
-  });
+  };
+
+  if (hostedOnlinePayment) {
+    await salesService.createPaymentIntent(saleData, { userId, guestId });
+    return res.status(201).json(ApiResponse.success({
+      orderNumber,
+      status: 'pending_payment',
+      payment,
+      paymentRedirect,
+    }, 'Payment initialized successfully'));
+  }
+
+  const item = await salesService.createSale(saleData);
   if (getCheckboxConfig().autoFiscalize && item.payment?.status === 'paid') {
     try {
       const fiscalized = await checkboxService.fiscalizeSale(item);
@@ -153,9 +165,14 @@ const wayForPayCallback = asyncHandler(async (req, res) => {
   if (!wayForPayService.verifyCallback(req.body)) {
     throw new ApiError('Invalid WayForPay callback signature', 400);
   }
-  const item = await salesService.applyWayForPayCallback(req.body);
+  const result = await salesService.completeWayForPayPayment(req.body);
+  const item = result.item;
+  if (item && !result.alreadyCompleted && result.owner) {
+    await cartsService.clear(result.owner.userId, result.owner.guestId);
+  }
   if (
-    req.body.transactionStatus === 'Approved'
+    item
+    && req.body.transactionStatus === 'Approved'
     && getCheckboxConfig().autoFiscalize
     && !item.checkboxFiscalization?.receiptId
   ) {
@@ -173,6 +190,11 @@ const wayForPayCallback = asyncHandler(async (req, res) => {
     }
   }
   res.status(200).json(wayForPayService.buildCallbackAcceptance(req.body.orderReference));
+});
+
+const getWayForPayStatus = asyncHandler(async (req, res) => {
+  const result = await salesService.getPaymentIntentStatus(String(req.params.orderReference || ''));
+  res.status(200).json(ApiResponse.success(result, 'Payment status retrieved successfully'));
 });
 
 const updateSale = asyncHandler(async (req, res) => {
@@ -194,6 +216,7 @@ module.exports = {
   quickOrder,
   checkout,
   wayForPayCallback,
+  getWayForPayStatus,
   updateSale,
   deleteSale,
 };

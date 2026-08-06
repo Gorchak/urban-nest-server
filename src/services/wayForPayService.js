@@ -96,7 +96,12 @@ const buildHostedPayment = ({ orderReference, amount, currency, items, customer 
     clientEmail: String(customer?.email || '').trim(),
     clientPhone: String(customer?.phone || '').replace(/\D/g, ''),
   };
-  if (config.returnUrl) request.returnUrl = config.returnUrl;
+  if (config.returnUrl) {
+    const returnUrl = new URL(config.returnUrl);
+    returnUrl.searchParams.set('payment', 'return');
+    returnUrl.searchParams.set('orderReference', orderReference);
+    request.returnUrl = returnUrl.toString();
+  }
   validatePurchaseRequest(request);
   request.merchantSignature = buildSignature(request, config.merchantSecretKey);
 

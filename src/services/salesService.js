@@ -358,6 +358,122 @@ const createSale = async (data) => {
   return created;
 };
 
+const createPaymentIntent = async (data, owner = {}) => {
+  const normalized = normalizeSale(data);
+  const errors = validateSale(normalized);
+  if (errors.length) throw new ApiError(errors.join(', '), 400);
+
+  const existingSale = await collections.SALES.findOne({
+    orderNumber: normalized.orderNumber,
+    deletedAt: null,
+  });
+  if (existingSale) throw new ApiError(`Sale "${normalized.orderNumber}" already exists`, 409);
+
+  const now = new Date();
+  const intent = {
+    orderNumber: normalized.orderNumber,
+    status: 'pending',
+    sale: normalized,
+    owner: {
+      userId: owner.userId || null,
+      guestId: owner.guestId || null,
+    },
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+  };
+  try {
+    await collections.PAYMENT_INTENTS.insertOne(intent);
+  } catch (error) {
+    if (error?.code === 11000) throw new ApiError(`Payment intent "${normalized.orderNumber}" already exists`, 409);
+    throw error;
+  }
+  return intent;
+};
+
+const getPaymentIntentStatus = async (orderNumber) => {
+  const sale = await collections.SALES.findOne({ orderNumber, deletedAt: null });
+  if (sale?.payment?.status === 'paid') {
+    return { orderReference: orderNumber, status: 'approved' };
+  }
+  const intent = await collections.PAYMENT_INTENTS.findOne({ orderNumber });
+  if (!intent) return { orderReference: orderNumber, status: 'not_found' };
+  return {
+    orderReference: orderNumber,
+    status: intent.status === 'completed' ? 'approved' : intent.status,
+    reason: intent.reason || null,
+  };
+};
+
+const completeWayForPayPayment = async (payload = {}) => {
+  const orderNumber = String(payload.orderReference || '');
+  const existingSale = await collections.SALES.findOne({ orderNumber, deletedAt: null });
+  if (existingSale?.payment?.status === 'paid') {
+    return { item: existingSale, owner: null, alreadyCompleted: true };
+  }
+
+  const intent = await collections.PAYMENT_INTENTS.findOne({ orderNumber });
+  if (!intent) return { item: await applyWayForPayCallback(payload), owner: null, alreadyCompleted: true };
+
+  const callbackAmount = Math.round((Number(payload.amount) || 0) * 100);
+  const intentAmount = Math.round((Number(intent.sale.grandTotal) || 0) * 100);
+  if (callbackAmount !== intentAmount || String(payload.currency || '') !== intent.sale.currency) {
+    throw new ApiError('WayForPay payment amount or currency does not match the order', 400);
+  }
+
+  if (payload.transactionStatus !== 'Approved') {
+    await collections.PAYMENT_INTENTS.updateOne(
+      { _id: intent._id, status: { $ne: 'completed' } },
+      {
+        $set: {
+          status: 'declined',
+          reason: payload.reason || 'Payment was not approved',
+          reasonCode: payload.reasonCode || null,
+          updatedAt: new Date(),
+        },
+      }
+    );
+    return { item: null, owner: intent.owner, alreadyCompleted: false };
+  }
+
+  const claimed = await collections.PAYMENT_INTENTS.findOneAndUpdate(
+    { _id: intent._id, status: { $in: ['pending', 'declined'] } },
+    { $set: { status: 'completing', updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  if (!claimed) {
+    const completedSale = await collections.SALES.findOne({ orderNumber, deletedAt: null });
+    return { item: completedSale, owner: intent.owner, alreadyCompleted: true };
+  }
+
+  try {
+    const item = await createSale({
+      ...claimed.sale,
+      status: 'processing',
+      payment: {
+        ...claimed.sale.payment,
+        method: 'online',
+        status: 'paid',
+        transactionId: payload.authCode || orderNumber,
+        paidAt: new Date(),
+        cardNetwork: payload.cardType || null,
+        cardDetails: payload.cardPan || null,
+      },
+    });
+    await collections.PAYMENT_INTENTS.updateOne(
+      { _id: claimed._id },
+      { $set: { status: 'completed', completedAt: new Date(), updatedAt: new Date() } }
+    );
+    return { item, owner: claimed.owner, alreadyCompleted: false };
+  } catch (error) {
+    await collections.PAYMENT_INTENTS.updateOne(
+      { _id: claimed._id },
+      { $set: { status: 'pending', completionError: error.message, updatedAt: new Date() } }
+    );
+    throw error;
+  }
+};
+
 const createQuickOrder = async (data = {}) => {
   const phone = userService.normalizePhone(data.phone || '');
   if (!phone) throw new ApiError('Phone is required', 400);
@@ -518,6 +634,9 @@ module.exports = {
   getUserSalesList,
   getSaleById,
   createSale,
+  createPaymentIntent,
+  getPaymentIntentStatus,
+  completeWayForPayPayment,
   createQuickOrder,
   setCheckboxFiscalization,
   applyWayForPayCallback,

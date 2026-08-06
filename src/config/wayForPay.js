@@ -10,7 +10,7 @@ const getWayForPayConfig = () => ({
   paymentUrl: process.env.WAYFORPAY_PAYMENT_URL || 'https://secure.wayforpay.com/pay',
   serviceUrl: process.env.WAYFORPAY_SERVICE_URL
     || 'https://api.uliastore.com.ua/api/sales/wayforpay/callback',
-  returnUrl: process.env.WAYFORPAY_RETURN_URL || '',
+  returnUrl: process.env.WAYFORPAY_RETURN_URL || 'https://uliastore.com.ua/checkout',
 });
 
 const getMissingWayForPayConfig = () => {

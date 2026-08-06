@@ -7,6 +7,7 @@ const COLLECTIONS = {
   CATEGORIES: 'categories',
   MERCHANDISE: 'merchandise',
   SALES: 'sales',
+  PAYMENT_INTENTS: 'payment_intents',
   EXPENSES: 'expenses',
   CARTS: 'carts',
   FAVORITES: 'favorites',

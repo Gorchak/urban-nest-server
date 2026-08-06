@@ -72,6 +72,10 @@ const ensurePerformanceIndexes = async () => {
       { deletedAt: 1, isActive: 1, isVisible: 1, sortOrder: 1 },
       { name: 'visible_brands' }
     ),
+    database.collection('payment_intents').createIndexes([
+      { key: { orderNumber: 1 }, name: 'payment_intent_order', unique: true },
+      { key: { expiresAt: 1 }, name: 'payment_intent_expiry', expireAfterSeconds: 0 },
+    ]),
   ]);
 };
 
