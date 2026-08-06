@@ -1,8 +1,12 @@
+const clean = (value) => String(value || '').trim();
+
 const getWayForPayConfig = () => ({
   apiUrl: process.env.WAYFORPAY_API_URL || 'https://api.wayforpay.com/api',
-  merchantAccount: process.env.WAYFORPAY_MERCHANT_ACCOUNT || '',
-  merchantSecretKey: process.env.WAYFORPAY_MERCHANT_SECRET_KEY || '',
-  merchantDomainName: process.env.WAYFORPAY_MERCHANT_DOMAIN || '',
+  merchantAccount: clean(process.env.WAYFORPAY_MERCHANT_ACCOUNT),
+  merchantSecretKey: clean(process.env.WAYFORPAY_MERCHANT_SECRET_KEY),
+  merchantDomainName: clean(process.env.WAYFORPAY_MERCHANT_DOMAIN)
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/.*$/, ''),
   paymentUrl: process.env.WAYFORPAY_PAYMENT_URL || 'https://secure.wayforpay.com/pay',
   serviceUrl: process.env.WAYFORPAY_SERVICE_URL
     || 'https://api.uliastore.com.ua/api/sales/wayforpay/callback',

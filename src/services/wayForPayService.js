@@ -38,6 +38,38 @@ const buildSignature = (request, secretKey) => hmacMd5([
   ...request.productPrice,
 ].join(';'), secretKey);
 
+const validatePurchaseRequest = (request) => {
+  const required = [
+    'merchantAccount',
+    'merchantDomainName',
+    'merchantTransactionSecureType',
+    'orderReference',
+    'orderDate',
+    'amount',
+    'currency',
+  ];
+  const missing = required.filter((field) => request[field] === undefined || request[field] === null || request[field] === '');
+  if (missing.length) throw new ApiError(`WayForPay purchase fields missing: ${missing.join(', ')}`, 503);
+  if (!(Number(request.amount) > 0)) throw new ApiError('WayForPay purchase amount must be greater than zero', 400);
+
+  const arrays = [request.productName, request.productCount, request.productPrice];
+  if (arrays.some((values) => !Array.isArray(values) || values.length === 0)) {
+    throw new ApiError('WayForPay purchase must contain products', 400);
+  }
+  if (new Set(arrays.map((values) => values.length)).size !== 1) {
+    throw new ApiError('WayForPay product arrays must have equal length', 400);
+  }
+  if (request.productName.some((value) => !String(value || '').trim())) {
+    throw new ApiError('WayForPay product names are required', 400);
+  }
+  if (request.productCount.some((value) => !(Number(value) > 0))) {
+    throw new ApiError('WayForPay product counts must be greater than zero', 400);
+  }
+  if (request.productPrice.some((value) => !(Number(value) >= 0))) {
+    throw new ApiError('WayForPay product prices are invalid', 400);
+  }
+};
+
 const buildHostedPayment = ({ orderReference, amount, currency, items, customer }) => {
   const missing = getMissingWayForPayConfig();
   if (missing.length) throw new ApiError(`WayForPay config missing: ${missing.join(', ')}`, 503);
@@ -45,18 +77,27 @@ const buildHostedPayment = ({ orderReference, amount, currency, items, customer 
   const config = getWayForPayConfig();
   const request = {
     merchantAccount: config.merchantAccount,
+    merchantAuthType: 'SimpleSignature',
     merchantDomainName: config.merchantDomainName,
+    merchantTransactionType: 'SALE',
+    merchantTransactionSecureType: 'AUTO',
     orderReference,
     orderDate: Math.floor(Date.now() / 1000),
     amount: money(amount),
     currency: currency || 'UAH',
-    merchantTransactionSecureType: 'AUTO',
+    apiVersion: 1,
+    language: 'UA',
     serviceUrl: config.serviceUrl,
     productName: items.map((item) => item.name),
     productPrice: items.map((item) => money(item.unitPrice)),
     productCount: items.map((item) => item.quantity),
+    clientFirstName: String(customer?.firstName || '').trim(),
+    clientLastName: String(customer?.lastName || '').trim(),
+    clientEmail: String(customer?.email || '').trim(),
+    clientPhone: String(customer?.phone || '').replace(/\D/g, ''),
   };
   if (config.returnUrl) request.returnUrl = config.returnUrl;
+  validatePurchaseRequest(request);
   request.merchantSignature = buildSignature(request, config.merchantSecretKey);
 
   const fields = Object.entries(request).flatMap(([name, value]) => {
@@ -163,6 +204,7 @@ const chargeGooglePay = async ({ orderReference, amount, currency, items, custom
 module.exports = {
   buildSignature,
   buildHostedPayment,
+  validatePurchaseRequest,
   verifyCallback,
   buildCallbackAcceptance,
   chargeGooglePay,
