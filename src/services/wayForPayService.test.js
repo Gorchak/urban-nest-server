@@ -51,6 +51,8 @@ describe('wayForPayService', () => {
       expect(fields.get('orderReference')).toEqual(['UN-1']);
       expect(fields.get('amount')).toEqual(['1200']);
       expect(fields.get('currency')).toEqual(['UAH']);
+      expect(fields.get('paymentSystems')).toEqual(['card']);
+      expect(fields.get('defaultPaymentSystem')).toEqual(['card']);
       expect(fields.get('productName[]')).toEqual(['Товар']);
       expect(fields.get('productCount[]')).toEqual(['2']);
       expect(fields.get('productPrice[]')).toEqual(['600']);

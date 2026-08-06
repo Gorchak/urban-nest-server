@@ -452,7 +452,7 @@ const completeWayForPayPayment = async (payload = {}) => {
       status: 'processing',
       payment: {
         ...claimed.sale.payment,
-        method: 'online',
+        method: 'wayforpay',
         status: 'paid',
         transactionId: payload.authCode || orderNumber,
         paidAt: new Date(),

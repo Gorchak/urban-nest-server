@@ -13,6 +13,7 @@ const VALID_PAYMENT_METHODS = [
   'google_pay',
   'bank_transfer',
   'online',
+  'wayforpay',
 ];
 
 const VALID_PAYMENT_STATUSES = ['unpaid', 'paid', 'partially_paid', 'refunded'];

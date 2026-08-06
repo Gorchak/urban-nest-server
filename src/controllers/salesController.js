@@ -89,10 +89,10 @@ const checkout = asyncHandler(async (req, res) => {
     ? (await userService.findOrCreateByPhone(req.body.customer.phone)).userId
     : null);
   const orderNumber = req.body.orderNumber || `UN-${Date.now().toString(36).toUpperCase()}`;
-  const hostedOnlinePayment = ['online', 'google_pay'].includes(req.body.payment?.method);
+  const hostedOnlinePayment = req.body.payment?.method === 'wayforpay';
   const payment = {
     ...req.body.payment,
-    method: hostedOnlinePayment ? 'online' : req.body.payment?.method,
+    method: hostedOnlinePayment ? 'wayforpay' : req.body.payment?.method,
     status: 'unpaid',
     transactionId: '',
     paidAt: null,
@@ -161,18 +161,18 @@ const checkout = asyncHandler(async (req, res) => {
   ));
 });
 
-const wayForPayCallback = asyncHandler(async (req, res) => {
-  if (!wayForPayService.verifyCallback(req.body)) {
+const processWayForPayResult = async (payload) => {
+  if (!wayForPayService.verifyCallback(payload)) {
     throw new ApiError('Invalid WayForPay callback signature', 400);
   }
-  const result = await salesService.completeWayForPayPayment(req.body);
+  const result = await salesService.completeWayForPayPayment(payload);
   const item = result.item;
   if (item && !result.alreadyCompleted && result.owner) {
     await cartsService.clear(result.owner.userId, result.owner.guestId);
   }
   if (
     item
-    && req.body.transactionStatus === 'Approved'
+    && payload.transactionStatus === 'Approved'
     && getCheckboxConfig().autoFiscalize
     && !item.checkboxFiscalization?.receiptId
   ) {
@@ -189,12 +189,53 @@ const wayForPayCallback = asyncHandler(async (req, res) => {
       console.error(`Checkbox fiscalization failed for ${item.orderNumber}: ${error.message}`);
     }
   }
+  return result;
+};
+
+const wayForPayCallback = asyncHandler(async (req, res) => {
+  await processWayForPayResult(req.body);
   res.status(200).json(wayForPayService.buildCallbackAcceptance(req.body.orderReference));
 });
 
 const getWayForPayStatus = asyncHandler(async (req, res) => {
   const result = await salesService.getPaymentIntentStatus(String(req.params.orderReference || ''));
   res.status(200).json(ApiResponse.success(result, 'Payment status retrieved successfully'));
+});
+
+const wayForPayReturn = asyncHandler(async (req, res) => {
+  const returnPayload = { ...req.query, ...req.body };
+  const orderReference = String(
+    returnPayload.orderReference
+    || ''
+  ).trim();
+  const clientUrl = process.env.CLIENT_URL
+    || (process.env.NODE_ENV === 'production' ? 'https://uliastore.com.ua' : 'http://localhost:4200');
+  const checkoutUrl = new URL('/checkout', clientUrl);
+  checkoutUrl.searchParams.set('payment', 'return');
+  if (orderReference) checkoutUrl.searchParams.set('orderReference', orderReference);
+
+  // During local development WayForPay cannot call a localhost serviceUrl.
+  // Its browser POST to returnUrl still contains the signed payment result, so
+  // process that result before redirecting the customer back to Angular.
+  if (req.method === 'POST' && returnPayload.transactionStatus) {
+    try {
+      await processWayForPayResult(returnPayload);
+    } catch (error) {
+      console.error(`WayForPay return processing failed for ${orderReference || 'unknown order'}: ${error.message}`);
+      checkoutUrl.searchParams.set(
+        'paymentError',
+        error.statusCode === 400
+          ? 'Не вдалося перевірити відповідь WayForPay.'
+          : 'Не вдалося обробити результат оплати WayForPay.'
+      );
+    }
+  } else if (returnPayload.reason && returnPayload.reason !== 'Ok') {
+    checkoutUrl.searchParams.set(
+      'paymentError',
+      `WayForPay відхилив платіж: ${String(returnPayload.reason).slice(0, 160)}`
+    );
+  }
+  res.redirect(303, checkoutUrl.toString());
 });
 
 const updateSale = asyncHandler(async (req, res) => {
@@ -217,6 +258,7 @@ module.exports = {
   checkout,
   wayForPayCallback,
   getWayForPayStatus,
+  wayForPayReturn,
   updateSale,
   deleteSale,
 };

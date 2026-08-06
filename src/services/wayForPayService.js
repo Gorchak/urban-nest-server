@@ -87,6 +87,8 @@ const buildHostedPayment = ({ orderReference, amount, currency, items, customer 
     currency: currency || 'UAH',
     apiVersion: 1,
     language: 'UA',
+    paymentSystems: 'card',
+    defaultPaymentSystem: 'card',
     serviceUrl: config.serviceUrl,
     productName: items.map((item) => item.name),
     productPrice: items.map((item) => money(item.unitPrice)),

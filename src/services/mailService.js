@@ -26,6 +26,7 @@ const paymentNames = {
   card: '&#1050;&#1072;&#1088;&#1090;&#1082;&#1086;&#1102;',
   google_pay: 'Google Pay',
   online: '&#1054;&#1085;&#1083;&#1072;&#1081;&#1085;',
+  wayforpay: 'WayForPay',
 };
 
 const renderItems = (sale) => sale.items.map((item) => {
