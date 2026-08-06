@@ -123,11 +123,18 @@ const checkout = asyncHandler(async (req, res) => {
 
   if (hostedOnlinePayment) {
     await salesService.createPaymentIntent(saleData, { userId, guestId });
+    let paymentUrl;
+    try {
+      paymentUrl = await wayForPayService.createHostedPaymentUrl(paymentRedirect);
+    } catch (error) {
+      await salesService.failPaymentIntent(orderNumber, error.message);
+      throw error;
+    }
     return res.status(201).json(ApiResponse.success({
       orderNumber,
       status: 'pending_payment',
       payment,
-      paymentRedirect,
+      paymentRedirect: { url: paymentUrl },
     }, 'Payment initialized successfully'));
   }
 

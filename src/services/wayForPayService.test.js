@@ -1,5 +1,11 @@
 const crypto = require('crypto');
-const { buildSignature, buildHostedPayment, normalizeIpv4, validatePurchaseRequest } = require('./wayForPayService');
+const {
+  buildSignature,
+  buildHostedPayment,
+  createHostedPaymentUrl,
+  normalizeIpv4,
+  validatePurchaseRequest,
+} = require('./wayForPayService');
 
 describe('wayForPayService', () => {
   test('builds the documented purchase signature in the required field order', () => {
@@ -81,6 +87,74 @@ describe('wayForPayService', () => {
       productCount: [],
       productPrice: [],
     })).toThrow('WayForPay purchase must contain products');
+  });
+
+  test('creates and validates an offline hosted payment URL', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ url: 'https://secure.wayforpay.com/page?payment=abc' }),
+    });
+    try {
+      const result = await createHostedPaymentUrl({
+        action: 'https://secure.wayforpay.com/pay',
+        method: 'POST',
+        fields: [
+          { name: 'merchantAccount', value: 'merchant' },
+          { name: 'productName[]', value: 'Товар' },
+        ],
+      });
+      expect(result).toBe('https://secure.wayforpay.com/page?payment=abc');
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://secure.wayforpay.com/pay?behavior=offline',
+        expect.objectContaining({ method: 'POST' })
+      );
+      const request = global.fetch.mock.calls[0][1];
+      expect(request.body.get('merchantAccount')).toBe('merchant');
+      expect(request.body.get('productName[]')).toBe('Товар');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  test('rejects an unexpected hosted payment URL', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ url: 'https://example.com/not-wayforpay' }),
+    });
+    try {
+      await expect(createHostedPaymentUrl({
+        action: 'https://secure.wayforpay.com/pay',
+        method: 'POST',
+        fields: [{ name: 'merchantAccount', value: 'merchant' }],
+      })).rejects.toThrow('unexpected payment URL');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  test('explains a merchant restriction returned by WayForPay', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ reason: 'Merchant Restriction', reasonCode: 1118 }),
+    });
+    try {
+      await expect(createHostedPaymentUrl({
+        action: 'https://secure.wayforpay.com/pay',
+        method: 'POST',
+        fields: [{ name: 'merchantAccount', value: 'merchant' }],
+      })).rejects.toMatchObject({
+        statusCode: 503,
+        message: expect.stringContaining('Merchant Login'),
+      });
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 
   test.each([

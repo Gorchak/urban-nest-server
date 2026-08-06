@@ -115,6 +115,49 @@ const buildHostedPayment = ({ orderReference, amount, currency, items, customer 
   return { action: config.paymentUrl, method: 'POST', fields };
 };
 
+const createHostedPaymentUrl = async (payment) => {
+  const endpoint = new URL(payment.action);
+  endpoint.searchParams.set('behavior', 'offline');
+  const body = new URLSearchParams();
+  payment.fields.forEach(({ name, value }) => body.append(name, value));
+
+  let response;
+  try {
+    response = await fetch(endpoint.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      body,
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (error) {
+    throw new ApiError(`WayForPay is unavailable: ${error.message}`, 502);
+  }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.url) {
+    const reason = result.reason || result.message || `HTTP ${response.status}`;
+    const reasonCode = result.reasonCode ? ` (код ${result.reasonCode})` : '';
+    if (String(result.reasonCode) === '1118' || reason === 'Merchant Restriction') {
+      throw new ApiError(
+        `WayForPay не дозволяє приймати платежі для цього магазину${reasonCode}. Перевірте Merchant Login, Secret Key та обмеження магазину в кабінеті WayForPay.`,
+        503
+      );
+    }
+    throw new ApiError(`WayForPay відхилив запит на оплату: ${reason}${reasonCode}`, 502);
+  }
+
+  let paymentUrl;
+  try {
+    paymentUrl = new URL(result.url);
+  } catch {
+    throw new ApiError('WayForPay returned an invalid payment URL', 502);
+  }
+  if (paymentUrl.protocol !== 'https:' || paymentUrl.hostname !== 'secure.wayforpay.com') {
+    throw new ApiError('WayForPay returned an unexpected payment URL', 502);
+  }
+  return paymentUrl.toString();
+};
+
 const callbackSignatureBase = (payload) => [
   payload.merchantAccount,
   payload.orderReference,
@@ -211,6 +254,7 @@ const chargeGooglePay = async ({ orderReference, amount, currency, items, custom
 module.exports = {
   buildSignature,
   buildHostedPayment,
+  createHostedPaymentUrl,
   validatePurchaseRequest,
   verifyCallback,
   buildCallbackAcceptance,

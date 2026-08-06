@@ -405,6 +405,19 @@ const getPaymentIntentStatus = async (orderNumber) => {
   };
 };
 
+const failPaymentIntent = async (orderNumber, reason) => {
+  await collections.PAYMENT_INTENTS.updateOne(
+    { orderNumber, status: { $ne: 'completed' } },
+    {
+      $set: {
+        status: 'declined',
+        reason: String(reason || 'Payment initialization failed'),
+        updatedAt: new Date(),
+      },
+    }
+  );
+};
+
 const completeWayForPayPayment = async (payload = {}) => {
   const orderNumber = String(payload.orderReference || '');
   const existingSale = await collections.SALES.findOne({ orderNumber, deletedAt: null });
@@ -635,6 +648,7 @@ module.exports = {
   getSaleById,
   createSale,
   createPaymentIntent,
+  failPaymentIntent,
   getPaymentIntentStatus,
   completeWayForPayPayment,
   createQuickOrder,
