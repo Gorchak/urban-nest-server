@@ -72,7 +72,8 @@ const hydrateSaleItems = async (sales = []) => {
 };
 
 const buildFilter = async (query = {}) => {
-  const filter = { deletedAt: null };
+  const includeDeleted = query.includeDeleted === true || query.includeDeleted === 'true';
+  const filter = includeDeleted ? {} : { deletedAt: null };
 
   if (query.userId) filter.userId = query.userId;
   if (query.status) filter.status = query.status;
