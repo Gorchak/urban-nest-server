@@ -205,7 +205,20 @@ const wayForPayCallback = asyncHandler(async (req, res) => {
 });
 
 const getWayForPayStatus = asyncHandler(async (req, res) => {
-  const result = await salesService.getPaymentIntentStatus(String(req.params.orderReference || ''));
+  const orderReference = String(req.params.orderReference || '');
+  let result = await salesService.getPaymentIntentStatus(orderReference);
+  if (['pending', 'completing'].includes(result.status)) {
+    try {
+      const providerResult = await wayForPayService.checkPaymentStatus(orderReference);
+      if (providerResult.transactionStatus) {
+        await processWayForPayResult(providerResult);
+        result = await salesService.getPaymentIntentStatus(orderReference);
+      }
+    } catch (error) {
+      // A temporary CHECK_STATUS failure must not hide the locally known state.
+      console.error(`WayForPay status reconciliation failed for ${orderReference}: ${error.message}`);
+    }
+  }
   res.status(200).json(ApiResponse.success(result, 'Payment status retrieved successfully'));
 });
 

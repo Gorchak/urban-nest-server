@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const {
   buildSignature,
   buildHostedPayment,
+  checkPaymentStatus,
   createHostedPaymentUrl,
   normalizeIpv4,
   validatePurchaseRequest,
@@ -154,6 +155,59 @@ describe('wayForPayService', () => {
       });
     } finally {
       global.fetch = originalFetch;
+    }
+  });
+
+  test('checks payment status with the documented signed request', async () => {
+    const previous = {
+      account: process.env.WAYFORPAY_MERCHANT_ACCOUNT,
+      secret: process.env.WAYFORPAY_MERCHANT_SECRET_KEY,
+      domain: process.env.WAYFORPAY_MERCHANT_DOMAIN,
+    };
+    const originalFetch = global.fetch;
+    process.env.WAYFORPAY_MERCHANT_ACCOUNT = 'merchant';
+    process.env.WAYFORPAY_MERCHANT_SECRET_KEY = 'secret';
+    process.env.WAYFORPAY_MERCHANT_DOMAIN = 'shop.example';
+    const statusPayload = {
+      merchantAccount: 'merchant',
+      orderReference: 'UN-STATUS-1',
+      amount: 100,
+      currency: 'UAH',
+      authCode: 'AUTH1',
+      cardPan: '42****42',
+      transactionStatus: 'Approved',
+      reasonCode: 1100,
+    };
+    statusPayload.merchantSignature = crypto.createHmac('md5', 'secret').update(
+      'merchant;UN-STATUS-1;100;UAH;AUTH1;42****42;Approved;1100',
+      'utf8'
+    ).digest('hex');
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => statusPayload,
+    });
+    try {
+      await expect(checkPaymentStatus('UN-STATUS-1')).resolves.toEqual(statusPayload);
+      const request = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(request).toMatchObject({
+        transactionType: 'CHECK_STATUS',
+        merchantAccount: 'merchant',
+        orderReference: 'UN-STATUS-1',
+        apiVersion: 1,
+      });
+      expect(request.merchantSignature).toBe(
+        crypto.createHmac('md5', 'secret').update('merchant;UN-STATUS-1', 'utf8').digest('hex')
+      );
+    } finally {
+      global.fetch = originalFetch;
+      const restore = (name, value) => {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      };
+      restore('WAYFORPAY_MERCHANT_ACCOUNT', previous.account);
+      restore('WAYFORPAY_MERCHANT_SECRET_KEY', previous.secret);
+      restore('WAYFORPAY_MERCHANT_DOMAIN', previous.domain);
     }
   });
 

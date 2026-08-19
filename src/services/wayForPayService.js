@@ -158,6 +158,48 @@ const createHostedPaymentUrl = async (payment) => {
   return paymentUrl.toString();
 };
 
+const checkPaymentStatus = async (orderReference) => {
+  const missing = getMissingWayForPayConfig();
+  if (missing.length) throw new ApiError(`WayForPay config missing: ${missing.join(', ')}`, 503);
+
+  const config = getWayForPayConfig();
+  const request = {
+    transactionType: 'CHECK_STATUS',
+    merchantAccount: config.merchantAccount,
+    orderReference: String(orderReference || '').trim(),
+    apiVersion: 1,
+  };
+  if (!request.orderReference) throw new ApiError('WayForPay orderReference is required', 400);
+  request.merchantSignature = hmacMd5(
+    `${request.merchantAccount};${request.orderReference}`,
+    config.merchantSecretKey
+  );
+
+  let response;
+  try {
+    response = await fetch(config.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (error) {
+    throw new ApiError(`WayForPay status check is unavailable: ${error.message}`, 502);
+  }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new ApiError(result.reason || `WayForPay status check failed: HTTP ${response.status}`, 502);
+  }
+  if (result.merchantAccount !== config.merchantAccount || result.orderReference !== request.orderReference) {
+    throw new ApiError('WayForPay returned status for an unexpected order', 502);
+  }
+  if (!verifyCallback(result)) {
+    throw new ApiError('Invalid WayForPay status signature', 502);
+  }
+  return result;
+};
+
 const callbackSignatureBase = (payload) => [
   payload.merchantAccount,
   payload.orderReference,
@@ -255,6 +297,7 @@ module.exports = {
   buildSignature,
   buildHostedPayment,
   createHostedPaymentUrl,
+  checkPaymentStatus,
   validatePurchaseRequest,
   verifyCallback,
   buildCallbackAcceptance,

@@ -450,8 +450,15 @@ const completeWayForPayPayment = async (payload = {}) => {
     return { item: null, owner: intent.owner, alreadyCompleted: false };
   }
 
+  const staleCompletionBefore = new Date(Date.now() - 2 * 60 * 1000);
   const claimed = await collections.PAYMENT_INTENTS.findOneAndUpdate(
-    { _id: intent._id, status: { $in: ['pending', 'declined'] } },
+    {
+      _id: intent._id,
+      $or: [
+        { status: { $in: ['pending', 'declined'] } },
+        { status: 'completing', updatedAt: { $lt: staleCompletionBefore } },
+      ],
+    },
     { $set: { status: 'completing', updatedAt: new Date() } },
     { returnDocument: 'after' }
   );
