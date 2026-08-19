@@ -7,7 +7,7 @@ jest.mock('resend', () => ({
 }));
 
 const { Resend } = require('resend');
-const { sendOrderNotification, renderOrderEmail } = require('./mailService');
+const { sendOrderNotification, renderOrderEmail, renderCustomerOrderEmail } = require('./mailService');
 
 const sale = {
   orderNumber: 'UN-123',
@@ -37,12 +37,17 @@ describe('Resend order email notifications', () => {
   });
 
   test('sends the existing order template through Resend', async () => {
-    mockSend.mockResolvedValue({ data: { id: 'email-id' }, error: null });
+    mockSend
+      .mockResolvedValueOnce({ data: { id: 'admin-email-id' }, error: null })
+      .mockResolvedValueOnce({ data: { id: 'customer-email-id' }, error: null });
 
     await expect(sendOrderNotification(sale)).resolves.toEqual({
       sent: true,
-      messageId: 'email-id',
+      messageId: 'admin-email-id',
       recipient: 'admin@example.com',
+      customerSent: true,
+      customerMessageId: 'customer-email-id',
+      customerRecipient: 'buyer@example.com',
     });
 
     expect(Resend).toHaveBeenCalledWith('re_test');
@@ -53,6 +58,13 @@ describe('Resend order email notifications', () => {
       subject: expect.stringContaining('UN-123'),
       html: expect.stringContaining('UN-123'),
     }), { idempotencyKey: 'order-UN-123' });
+    expect(mockSend).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      from: 'Urban Nest <orders@uliastore.com.ua>',
+      to: 'buyer@example.com',
+      subject: 'Ваше замовлення UN-123 успішно оформлено',
+      text: expect.stringContaining('Разом:'),
+      html: expect.stringContaining('Замовлення успішно оформлено'),
+    }), { idempotencyKey: 'order-UN-123-customer' });
   });
 
   test('surfaces Resend API errors', async () => {
@@ -70,5 +82,27 @@ describe('Resend order email notifications', () => {
 
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
+  });
+
+  test('renders product details and total in the customer template', () => {
+    const html = renderCustomerOrderEmail(sale);
+
+    expect(html).toContain('Стілець');
+    expect(html).toContain('2 &#1096;&#1090;.');
+    expect(html).toMatch(/2[\s\u00a0]400 UAH/);
+  });
+
+  test('skips the customer email when no customer email was provided', async () => {
+    mockSend.mockResolvedValue({ data: { id: 'admin-email-id' }, error: null });
+
+    await expect(sendOrderNotification({
+      ...sale,
+      customer: { ...sale.customer, email: '' },
+    })).resolves.toEqual(expect.objectContaining({
+      customerSent: false,
+      customerMessageId: null,
+      customerRecipient: null,
+    }));
+    expect(mockSend).toHaveBeenCalledTimes(1);
   });
 });

@@ -329,6 +329,9 @@ const createSale = async (data) => {
       sentAt: notification.sent ? new Date() : null,
       messageId: notification.messageId || null,
       recipient: notification.recipient || null,
+      customerSent: notification.customerSent || false,
+      customerMessageId: notification.customerMessageId || null,
+      customerRecipient: notification.customerRecipient || null,
       missingConfig: notification.missing || [],
     };
     await collections.SALES.updateOne({ _id: result.insertedId }, { $set: { emailNotification } });

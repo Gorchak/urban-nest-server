@@ -118,6 +118,61 @@ const renderOrderText = (sale) => [
   `Total: ${formatPrice(sale.grandTotal, sale.currency)}`,
 ].join('\n');
 
+const renderCustomerOrderEmail = (sale) => {
+  const customerName = [sale.customer?.firstName, sale.customer?.lastName]
+    .filter(Boolean)
+    .map(escapeHtml)
+    .join(' ');
+  const deliveryName = deliveryNames[sale.shippingAddress?.deliveryService]
+    || escapeHtml(sale.shippingAddress?.deliveryService);
+  const paymentName = paymentNames[sale.payment?.method] || escapeHtml(sale.payment?.method);
+
+  return `<!doctype html>
+  <html lang="uk">
+  <body style="margin:0;background:#f3f0e9;color:#1d1d1a;font-family:Arial,sans-serif">
+    <div style="padding:32px 12px">
+      <div style="max-width:720px;margin:0 auto;background:#fff;border:1px solid #e5e0d7">
+        <div style="padding:36px 30px;background:#1d1d1a;color:#fff;text-align:center">
+          <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase">ULIA STORE</div>
+          <h1 style="margin:16px 0 10px;font-family:Georgia,serif;font-size:36px;font-weight:400">Замовлення успішно оформлено</h1>
+          <div style="color:#d9d4ca;font-size:16px">Замовлення № ${escapeHtml(sale.orderNumber)}</div>
+        </div>
+
+        <div style="padding:32px 30px">
+          <p style="margin:0 0 10px;font-family:Georgia,serif;font-size:24px">${customerName ? `Вітаємо, ${customerName}!` : 'Вітаємо!'}</p>
+          <p style="margin:0 0 26px;color:#665f55;line-height:1.6">Дякуємо за ваше замовлення. Ми вже отримали його та зв&rsquo;яжемося з вами для підтвердження.</p>
+
+          <h2 style="margin:0 0 6px;font-family:Georgia,serif;font-size:25px;font-weight:400">Ваше замовлення</h2>
+          <table role="presentation" style="width:100%;border-collapse:collapse">${renderItems(sale)}</table>
+
+          <table role="presentation" style="width:100%;margin-top:24px;border-collapse:collapse">
+            <tr><td style="padding:7px 0;color:#777">Спосіб оплати</td><td style="padding:7px 0;text-align:right">${paymentName}</td></tr>
+            <tr><td style="padding:7px 0;color:#777">Доставка</td><td style="padding:7px 0;text-align:right">${deliveryName}</td></tr>
+            <tr><td style="padding:7px 0;color:#777">Адреса</td><td style="padding:7px 0;text-align:right">${renderDeliveryAddress(sale.shippingAddress) || 'Не вказано'}</td></tr>
+            <tr><td style="padding:16px 0 0;font-size:20px;font-weight:700">Разом</td><td style="padding:16px 0 0;color:#c85436;text-align:right;font-size:24px;font-weight:700">${formatPrice(sale.grandTotal, sale.currency)}</td></tr>
+          </table>
+
+          ${sale.notes ? `<div style="margin-top:24px;padding:16px;background:#f6f3ed"><b>Коментар:</b> ${escapeHtml(sale.notes)}</div>` : ''}
+        </div>
+
+        <div style="padding:22px 30px;background:#ebe6dc;color:#665f55;font-size:12px;text-align:center">
+          ULIA STORE &middot; Дякуємо, що обираєте нас
+        </div>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+const renderCustomerOrderText = (sale) => [
+  `Замовлення № ${sale.orderNumber} успішно оформлено.`,
+  'Дякуємо за ваше замовлення. Ми зв’яжемося з вами для підтвердження.',
+  '',
+  ...sale.items.map((item) => `${item.name}${item.inventoryValueLabel ? ` (${item.inventoryValueLabel})` : ''} x ${item.quantity}: ${formatPrice(item.totalPrice, sale.currency)}`),
+  '',
+  `Разом: ${formatPrice(sale.grandTotal, sale.currency)}`,
+].join('\n');
+
 const sendOrderNotification = async (sale) => {
   const config = getMailConfig();
   const missing = getMissingMailConfig(config);
@@ -141,7 +196,38 @@ const sendOrderNotification = async (sale) => {
     throw new Error(`Resend API error: ${error.message || JSON.stringify(error)}`);
   }
 
-  return { sent: true, messageId: data.id, recipient: config.adminOrderEmail };
+  let customerMessageId = null;
+  const customerRecipient = String(sale.customer?.email || '').trim();
+  if (customerRecipient) {
+    const customerResult = await resend.emails.send({
+      from: config.from,
+      to: customerRecipient,
+      subject: `Ваше замовлення ${sale.orderNumber} успішно оформлено`,
+      text: renderCustomerOrderText(sale),
+      html: renderCustomerOrderEmail(sale),
+    }, {
+      idempotencyKey: `order-${sale.orderNumber}-customer`,
+    });
+    if (customerResult.error) {
+      throw new Error(`Resend customer email error: ${customerResult.error.message || JSON.stringify(customerResult.error)}`);
+    }
+    customerMessageId = customerResult.data.id;
+  }
+
+  return {
+    sent: true,
+    messageId: data.id,
+    recipient: config.adminOrderEmail,
+    customerSent: Boolean(customerMessageId),
+    customerMessageId,
+    customerRecipient: customerRecipient || null,
+  };
 };
 
-module.exports = { sendOrderNotification, renderOrderEmail, renderOrderText };
+module.exports = {
+  sendOrderNotification,
+  renderOrderEmail,
+  renderOrderText,
+  renderCustomerOrderEmail,
+  renderCustomerOrderText,
+};
