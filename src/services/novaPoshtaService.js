@@ -34,21 +34,23 @@ const callNovaPoshta = async (modelName, calledMethod, methodProperties = {}) =>
 
 const getAreas = () => callNovaPoshta('Address', 'getAreas');
 
-const getCities = ({ areaRef, search, page = 1, limit = 500 } = {}) =>
+const normalizePageSize = (value, fallback = 50) => Math.min(100, Math.max(1, Number.parseInt(value, 10) || fallback));
+
+const getCities = ({ areaRef, search, page = 1, limit = 50 } = {}) =>
   callNovaPoshta('Address', 'getCities', {
     Page: String(page),
-    Limit: String(limit),
+    Limit: String(normalizePageSize(limit)),
     ...(areaRef ? { AreaRef: areaRef } : {}),
     ...(search ? { FindByString: search } : {}),
   });
 
-const getWarehouses = ({ cityRef, search, page = 1, limit = 500 } = {}) => {
+const getWarehouses = ({ cityRef, search, page = 1, limit = 50 } = {}) => {
   if (!cityRef) throw new ApiError('cityRef is required', 400);
 
   return callNovaPoshta('Address', 'getWarehouses', {
     CityRef: cityRef,
     Page: String(page),
-    Limit: String(limit),
+    Limit: String(normalizePageSize(limit)),
     ...(search ? { FindByString: search } : {}),
   });
 };

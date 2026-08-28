@@ -11,6 +11,8 @@ const { connectDB, ensurePerformanceIndexes, closeDB } = require('./config/datab
 const PORT = process.env.PORT || 3000;
 
 let server;
+let shuttingDown = false;
+let shutdownTimer;
 
 const startServer = async () => {
   await connectDB();
@@ -22,10 +24,13 @@ const startServer = async () => {
 };
 
 const gracefulShutdown = async (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log(`\n${signal} received. Starting graceful shutdown...`);
 
   if (server) {
     server.close(async () => {
+      clearTimeout(shutdownTimer);
       console.log('HTTP server closed');
       await closeDB();
       process.exit(0);
@@ -35,10 +40,11 @@ const gracefulShutdown = async (signal) => {
     process.exit(0);
   }
 
-  setTimeout(() => {
+  shutdownTimer = setTimeout(() => {
     console.error('Forced shutdown due to timeout');
     process.exit(1);
   }, 10000);
+  shutdownTimer.unref();
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
