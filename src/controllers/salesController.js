@@ -8,6 +8,7 @@ const { calculateDiscountedPrice } = require('../models/merchandiseModel');
 const checkboxService = require('../services/checkboxService');
 const { getCheckboxConfig } = require('../config/checkbox');
 const wayForPayService = require('../services/wayForPayService');
+const { calculateCheckoutPayment } = require('../utils/paymentPricing');
 
 const getSales = asyncHandler(async (req, res) => {
   const result = await salesService.getSalesList(req.query);
@@ -89,22 +90,40 @@ const checkout = asyncHandler(async (req, res) => {
     ? (await userService.findOrCreateByPhone(req.body.customer.phone)).userId
     : null);
   const orderNumber = req.body.orderNumber || `UN-${Date.now().toString(36).toUpperCase()}`;
-  const hostedOnlinePayment = req.body.payment?.method === 'wayforpay';
+  const requestedPaymentMethod = req.body.payment?.method;
+  const hostedOnlinePayment = ['wayforpay', 'cash_on_delivery'].includes(requestedPaymentMethod);
+  const checkoutTotal = subtotal + Math.max(0, Number(req.body.shippingCost || 0));
+  const paymentPricing = hostedOnlinePayment
+    ? calculateCheckoutPayment(checkoutTotal, requestedPaymentMethod)
+    : null;
   const payment = {
     ...req.body.payment,
-    method: hostedOnlinePayment ? 'wayforpay' : req.body.payment?.method,
+    method: requestedPaymentMethod,
     status: 'unpaid',
     transactionId: '',
     paidAt: null,
     googlePay: undefined,
+    ...(paymentPricing || {}),
   };
   const status = hostedOnlinePayment ? 'pending_payment' : req.body.status;
+  const paymentItems = requestedPaymentMethod === 'cash_on_delivery'
+    ? [
+      { name: 'Передоплата за замовлення', unitPrice: paymentPricing.basePaymentAmount, quantity: 1 },
+      { name: 'Комісія WayForPay 2%', unitPrice: paymentPricing.serviceFee, quantity: 1 },
+    ]
+    : [
+      ...items,
+      ...(Number(req.body.shippingCost) > 0
+        ? [{ name: 'Доставка', unitPrice: Math.max(0, Number(req.body.shippingCost)), quantity: 1 }]
+        : []),
+      { name: 'Комісія WayForPay 2%', unitPrice: paymentPricing?.serviceFee || 0, quantity: 1 },
+    ];
   const paymentRedirect = hostedOnlinePayment
     ? wayForPayService.buildHostedPayment({
       orderReference: orderNumber,
-      amount: subtotal + Math.max(0, Number(req.body.shippingCost || 0)),
+      amount: paymentPricing.chargedAmount,
       currency: req.body.currency || 'UAH',
-      items,
+      items: paymentItems,
       customer: req.body.customer,
     })
     : null;
@@ -118,7 +137,7 @@ const checkout = asyncHandler(async (req, res) => {
     items,
     subtotal,
     discountTotal: 0,
-    grandTotal: subtotal + Math.max(0, Number(req.body.shippingCost || 0)),
+    grandTotal: paymentPricing?.orderTotal ?? checkoutTotal,
   };
 
   if (hostedOnlinePayment) {

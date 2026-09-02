@@ -61,6 +61,8 @@ const MerchandiseSchema = {
     seoKeywords: { type: 'array', items: { type: 'string' } },
     canonicalUrl: { type: 'string', maxLength: 2048 },
     ogImage: { type: 'string', maxLength: 2048 },
+    aggregateRating: { type: 'object', nullable: true },
+    review: { type: 'object', nullable: true },
   },
 };
 
@@ -397,6 +399,28 @@ const validateMerchandise = (data) => {
   }
   if (data.seoKeywords && !Array.isArray(data.seoKeywords)) {
     errors.push('SEO keywords must be an array');
+  }
+
+  if (data.aggregateRating != null) {
+    const { ratingValue, reviewCount } = data.aggregateRating;
+    if (typeof ratingValue !== 'number' || !Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      errors.push('aggregateRating.ratingValue must be a number between 1 and 5');
+    }
+    if (!Number.isInteger(reviewCount) || reviewCount < 1) {
+      errors.push('aggregateRating.reviewCount must be a positive integer');
+    }
+  }
+
+  if (data.review != null) {
+    const { author, reviewBody, ratingValue, datePublished } = data.review;
+    if (typeof author !== 'string' || !author.trim()) errors.push('review.author is required');
+    if (typeof reviewBody !== 'string' || !reviewBody.trim()) errors.push('review.reviewBody is required');
+    if (typeof ratingValue !== 'number' || !Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      errors.push('review.ratingValue must be a number between 1 and 5');
+    }
+    if (datePublished && (typeof datePublished !== 'string' || Number.isNaN(Date.parse(datePublished)))) {
+      errors.push('review.datePublished must be a valid date');
+    }
   }
 
   return errors;

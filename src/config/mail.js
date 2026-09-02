@@ -4,6 +4,7 @@ const getMailConfig = () => ({
   adminOrderEmail: process.env.ADMIN_ORDER_EMAIL || process.env.ORDER_NOTIFICATION_EMAIL || DEFAULT_ADMIN_ORDER_EMAIL,
   apiKey: process.env.RESEND_API_KEY || '',
   from: process.env.RESEND_FROM_EMAIL || '',
+  newsletterFrom: process.env.NEWSLETTER_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || '',
 });
 
 const getMissingMailConfig = (config = getMailConfig()) => [

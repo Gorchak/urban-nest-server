@@ -433,7 +433,7 @@ const completeWayForPayPayment = async (payload = {}) => {
   if (!intent) return { item: await applyWayForPayCallback(payload), owner: null, alreadyCompleted: true };
 
   const callbackAmount = Math.round((Number(payload.amount) || 0) * 100);
-  const intentAmount = Math.round((Number(intent.sale.grandTotal) || 0) * 100);
+  const intentAmount = Math.round((Number(intent.sale.payment?.chargedAmount ?? intent.sale.grandTotal) || 0) * 100);
   if (callbackAmount !== intentAmount || String(payload.currency || '') !== intent.sale.currency) {
     throw new ApiError('WayForPay payment amount or currency does not match the order', 400);
   }
@@ -476,8 +476,10 @@ const completeWayForPayPayment = async (payload = {}) => {
       status: 'processing',
       payment: {
         ...claimed.sale.payment,
-        method: 'wayforpay',
-        status: 'paid',
+        method: claimed.sale.payment?.method || 'wayforpay',
+        status: claimed.sale.payment?.method === 'cash_on_delivery' && claimed.sale.payment?.balanceDue > 0
+          ? 'partially_paid'
+          : 'paid',
         transactionId: payload.authCode || orderNumber,
         paidAt: new Date(),
         cardNetwork: payload.cardType || null,

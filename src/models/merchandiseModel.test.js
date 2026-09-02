@@ -48,3 +48,26 @@ describe('merchandise inventory', () => {
     });
   });
 });
+
+describe('merchandise structured product data', () => {
+  const item = { name: 'Test item', sku: 'TEST-1', categoryId: '507f1f77bcf86cd799439011' };
+
+  test('accepts a valid aggregate rating and review', () => {
+    expect(validateMerchandise({
+      ...item,
+      aggregateRating: { ratingValue: 4.8, reviewCount: 12 },
+      review: { author: 'Покупець', reviewBody: 'Чудовий товар', ratingValue: 5, datePublished: '2026-09-01' },
+    })).toEqual([]);
+  });
+
+  test('rejects incomplete or invalid rating data', () => {
+    const errors = validateMerchandise({
+      ...item,
+      aggregateRating: { ratingValue: 6, reviewCount: 0 },
+      review: { author: '', reviewBody: '', ratingValue: 0 },
+    });
+    expect(errors).toContain('aggregateRating.ratingValue must be a number between 1 and 5');
+    expect(errors).toContain('aggregateRating.reviewCount must be a positive integer');
+    expect(errors).toContain('review.author is required');
+  });
+});

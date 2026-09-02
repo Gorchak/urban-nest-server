@@ -47,6 +47,20 @@ const mapSpec = (s) => ({
   value: s.value !== undefined ? s.value : null,
 });
 
+const mapAggregateRating = (value) => value ? {
+  ratingValue: Number(value.ratingValue),
+  reviewCount: Number(value.reviewCount),
+  bestRating: 5,
+  worstRating: 1,
+} : null;
+
+const mapReview = (value) => value ? {
+  author: String(value.author).trim(),
+  reviewBody: String(value.reviewBody).trim(),
+  ratingValue: Number(value.ratingValue),
+  datePublished: value.datePublished || null,
+} : null;
+
 /**
  * Builds the MongoDB filter object from supported query params.
  */
@@ -408,6 +422,8 @@ const createMerchandise = async (data) => {
     seoKeywords: Array.isArray(data.seoKeywords) ? data.seoKeywords : [],
     canonicalUrl: data.canonicalUrl || null,
     ogImage: data.ogImage || null,
+    aggregateRating: mapAggregateRating(data.aggregateRating),
+    review: mapReview(data.review),
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
@@ -528,6 +544,8 @@ const updateMerchandise = async (id, updates) => {
   if (updates.seoKeywords !== undefined) updatedFields.seoKeywords = updates.seoKeywords;
   if (updates.canonicalUrl !== undefined) updatedFields.canonicalUrl = updates.canonicalUrl;
   if (updates.ogImage !== undefined) updatedFields.ogImage = updates.ogImage;
+  if (updates.aggregateRating !== undefined) updatedFields.aggregateRating = mapAggregateRating(updates.aggregateRating);
+  if (updates.review !== undefined) updatedFields.review = mapReview(updates.review);
 
   const result = await collections.MERCHANDISE.findOneAndUpdate(
     { _id: new ObjectId(id), deletedAt: null },

@@ -12,6 +12,8 @@ const COLLECTIONS = {
   CARTS: 'carts',
   FAVORITES: 'favorites',
   BRANDS: 'brands',
+  NEWSLETTER_SUBSCRIBERS: 'newsletterSubscribers',
+  NEWSLETTER_CAMPAIGNS: 'newsletterCampaigns',
 };
 
 const collections = {};

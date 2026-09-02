@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const { protectAuth0 } = require('../middleware/authMiddleware');
+const { protectAuth0, requireSelfOrAdmin } = require('../middleware/authMiddleware');
 
 const allowAuthenticatedUserManagement = (req, _res, next) => {
   req.canManageUsers = true;
@@ -14,5 +14,7 @@ router.get('/:id', protectAuth0, allowAuthenticatedUserManagement, userControlle
 router.put('/:id', protectAuth0, allowAuthenticatedUserManagement, userController.updateUser);
 router.post('/:id/password', protectAuth0, allowAuthenticatedUserManagement, userController.updateUserPassword);
 router.post('/:id/password-reset', protectAuth0, allowAuthenticatedUserManagement, userController.sendPasswordReset);
+router.get('/:id/newsletter', protectAuth0, requireSelfOrAdmin, require('../controllers/newsletterController').getUserPreference);
+router.put('/:id/newsletter', protectAuth0, requireSelfOrAdmin, require('../controllers/newsletterController').setUserPreference);
 
 module.exports = router;

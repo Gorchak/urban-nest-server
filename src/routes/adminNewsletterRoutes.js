@@ -1,0 +1,10 @@
+const router = require('express').Router();
+const controller = require('../controllers/newsletterController');
+const { protectAuth0, requireAdmin } = require('../middleware/authMiddleware');
+router.use(protectAuth0, requireAdmin);
+router.get('/preview', controller.preview);
+router.post('/send', controller.send);
+router.get('/subscribers', controller.getSubscribers);
+router.delete('/subscribers/:id', controller.deleteSubscriber);
+router.post('/campaigns/:id/retry', controller.retryCampaign);
+module.exports = router;

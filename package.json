@@ -9,6 +9,7 @@
     "dev": "nodemon src/server.js",
     "lint": "eslint src/",
     "test": "jest"
+    ,"newsletter:send": "node src/scripts/sendNewsletter.js"
   },
   "keywords": [
     "urban-nest",

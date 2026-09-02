@@ -76,6 +76,20 @@ const ensurePerformanceIndexes = async () => {
       { key: { orderNumber: 1 }, name: 'payment_intent_order', unique: true },
       { key: { expiresAt: 1 }, name: 'payment_intent_expiry', expireAfterSeconds: 0 },
     ]),
+    database.collection('newsletterSubscribers').createIndexes([
+      { key: { email: 1 }, name: 'newsletter_email', unique: true },
+      { key: { unsubscribeTokenHash: 1 }, name: 'newsletter_unsubscribe_token', unique: true, sparse: true },
+      { key: { isActive: 1 }, name: 'active_newsletter_subscribers' },
+    ]),
+    database.collection('newsletterCampaigns').createIndexes([
+      { key: { type: 1, status: 1, completedAt: -1 }, name: 'newsletter_history' },
+      {
+        key: { type: 1, status: 1 },
+        name: 'one_processing_newsletter',
+        unique: true,
+        partialFilterExpression: { status: 'processing' },
+      },
+    ]),
   ]);
 };
 

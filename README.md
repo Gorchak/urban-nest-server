@@ -30,6 +30,8 @@ cp .env.example .env
 | ADMIN_ORDER_EMAIL | Recipient of new-order email notifications | Uliaconcept@gmail.com |
 | RESEND_API_KEY | Resend API key with permission to send email | - |
 | RESEND_FROM_EMAIL | Sender on the domain verified in Resend | - |
+| NEWSLETTER_FROM_EMAIL | Newsletter sender on a domain verified in Resend (falls back to `RESEND_FROM_EMAIL`) | - |
+| FRONTEND_URL | Public frontend origin used in product and unsubscribe links | https://uliastore.com.ua |
 | ORDER_SMS_RECIPIENT | Phone number that receives order SMS notifications | +380679403549 |
 | SMS_PROVIDER_URL | HTTP endpoint used to send order SMS notifications | - |
 | SMS_API_TOKEN | Bearer token for the SMS provider endpoint | - |
@@ -48,7 +50,31 @@ mailbox in Resend, but using a reply-capable address is recommended.
 ```bash
 npm run dev      # Start with nodemon (development)
 npm start        # Start server (production)
+npm run newsletter:send # Send only new, previously unsent products
 ```
+
+## Newsletter and Render Cron Job
+
+The public API uses `POST /api/newsletter/subscribe` and token-based
+`GET /api/newsletter/unsubscribe`. Admin preview and sending are protected by
+the existing Auth0 admin middleware at `GET /api/admin/newsletter/preview` and
+`POST /api/admin/newsletter/send`.
+
+In Render, create a **Cron Job** from the same backend repository and configure:
+
+- Root Directory: `server`
+- Build Command: `npm ci`
+- Start/Command: `npm run newsletter:send`
+- Schedule: `0 8 1 * *` (08:00 UTC on the first day of every month; 11:00 Kyiv
+  during EEST and 10:00 during EET)
+- Environment variables: use the same `MONGODB_URI`, `RESEND_API_KEY`,
+  `NEWSLETTER_FROM_EMAIL`, `RESEND_FROM_EMAIL`, `FRONTEND_URL`, and
+  `NODE_ENV=production` values as the backend web service.
+
+The command connects to MongoDB, runs the shared newsletter service once, logs
+only aggregate results, closes the connection, and exits. Campaign history and
+a unique partial MongoDB index prevent concurrent manual/Cron runs from sending
+the same product twice.
 
 ## Project Structure
 
